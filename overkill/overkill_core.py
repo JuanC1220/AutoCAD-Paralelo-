@@ -154,6 +154,18 @@ def overkill_seq(L, tol=1e-6, end_to_end=False, ignore=()):
 
 # ---------------------------------------------------------------- paralelo
 _G = {}   # estado heredado por fork (copia en escritura, sin serializar la entrada)
+
+
+def _init(state):
+    _G.update(state)
+
+
+def _pool(workers):
+    """fork donde existe (Linux/macOS): los trabajadores heredan _G sin copiarlo.
+    En Windows no hay fork: spawn y se envía _G una vez a cada trabajador."""
+    if "fork" in mp.get_all_start_methods():
+        return mp.get_context("fork").Pool(workers)
+    return mp.get_context("spawn").Pool(workers, initializer=_init, initargs=(dict(_G),))
 _M = 2147483647   # primo 2^31-1: c mod _M cabe en int64 sin desbordar
 
 
@@ -212,7 +224,7 @@ def overkill_par(L, workers=4, tol=1e-6, end_to_end=False, ignore=(), timings=No
     _G.update(L=L, props=props.tolist(), tol=tol, e2e=end_to_end, parts=parts)
     t1 = time.perf_counter()
     # calcular en paralelo: cada partición es independiente (sin bordes que coser)
-    with mp.get_context("fork").Pool(workers) as pool:
+    with _pool(workers) as pool:
         outs = pool.map(_work, sorted(range(nparts), key=lambda j: -len(parts[j])), chunksize=1)
     t2 = time.perf_counter()
     # reensamblar: orden determinista por índice de entidad original
@@ -330,7 +342,7 @@ def acad_par(L, workers=4, tol=1e-6, end_to_end=False, ignore=(), timings=None):
     parts = [p.tolist() for p in np.split(order, cuts)]
     _G.update(L=L, props=props.tolist(), b=b.tolist(), tol=tol, e2e=end_to_end, parts=parts)
     t1 = time.perf_counter()
-    with mp.get_context("fork").Pool(workers) as pool:
+    with _pool(workers) as pool:
         outs = pool.map(_acad_work, sorted(range(nparts), key=lambda j: -len(parts[j])), chunksize=1)
     t2 = time.perf_counter()
     flat = np.concatenate([np.asarray(f, dtype=np.int64) for f in outs]).reshape(-1, 5)
