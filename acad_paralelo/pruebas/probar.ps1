@@ -3,11 +3,12 @@
 #   powershell -ExecutionPolicy Bypass -File probar.ps1 -Modo overkill -Dxf s400k.dxf [-Hilos 1,16,32] [-TimeoutMin 30]
 #   powershell -ExecutionPolicy Bypass -File probar.ps1 -Modo hatch -Dxf h50.dxf     (h50.puntos.txt al lado)
 param(
-    [Parameter(Mandatory)][ValidateSet('overkill', 'hatch')][string]$Modo,
+    [Parameter(Mandatory)][ValidateSet('overkill', 'hatch', 'leer')][string]$Modo,
     [Parameter(Mandatory)][string]$Dxf,
     [string[]]$Hilos = @('1', [Environment]::ProcessorCount),
     [string]$Dll = '',
-    [int]$TimeoutMin = 30
+    [int]$TimeoutMin = 30,
+    [switch]$SoloPoverkill   # salta el OVERKILL nativo y POVERKILLBENCH
 )
 $ErrorActionPreference = 'Stop'
 # PowerShell 5.1 deja $PSScriptRoot vacío en los valores por defecto de param()
@@ -52,7 +53,12 @@ function Correr([string]$nombre, [string]$cuerpo) {
 
 $anota = { param($etq, $tipo) "(setq f (open `"@RES@`" `"w`"))(write-line (strcat `"$etq`: `" (itoa (sslength (ssget `"_X`" '((0 . `"$tipo`"))))) `" $tipo, `" (itoa (- (getvar `"MILLISECS`") t0)) `" ms`") f)(close f)" }
 
-if ($Modo -eq 'overkill') {
+if ($Modo -eq 'leer') {
+    # compara formas de leer las LINE (no modifica el dibujo)
+    Correr 'pleermedir' ($cargar + "(setq t0 (getvar `"MILLISECS`"))`nPLEERMEDIR`n`n" + (& $anota 'pleermedir' 'LINE'))
+}
+elseif ($Modo -eq 'overkill') {
+    if (-not $SoloPoverkill) {
     # OVERKILL nativo con los ajustes de fábrica (tolerancia 1e-6, no ignorar nada, extremo con extremo Sí)
     Correr 'overkill_nativo' (@"
 (setq t0 (getvar "MILLISECS"))
@@ -68,6 +74,7 @@ _Y
 
 
 "@ + (& $anota 'overkill_nativo' 'LINE'))
+    }
     foreach ($t in $Hilos) {
         Correr "poverkill_$($t)hilos" ($cargar + @"
 (setq t0 (getvar "MILLISECS"))
@@ -80,14 +87,14 @@ $t
 
 "@ + (& $anota "poverkill_$($t)hilos" 'LINE'))
     }
-    Correr 'poverkillbench' ($cargar + @"
+    if (-not $SoloPoverkill) { Correr 'poverkillbench' ($cargar + @"
 (setq t0 (getvar "MILLISECS"))
 POVERKILLBENCH
 _ALL
 
 
 
-"@ + (& $anota 'poverkillbench' 'LINE'))
+"@ + (& $anota 'poverkillbench' 'LINE')) }
 }
 else {
     $pts = Get-Content ([IO.Path]::ChangeExtension($dxf, '.puntos.txt'))

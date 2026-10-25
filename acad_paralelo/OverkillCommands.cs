@@ -25,15 +25,6 @@ namespace AcadParalelo
         static bool sIgnoreLayer = false;
         static bool sE2e = true;
 
-        sealed class Drawing
-        {
-            public ObjectId[] Ids;
-            public double[] Z;
-            public Overkill.Lines L;
-            public long[] Props;
-            public int Skipped;
-        }
-
         // POVERKILL: selecciona, ajusta opciones y aplica
         [CommandMethod("POVERKILL", CommandFlags.Modal | CommandFlags.UsePickSet)]
         public void PoverKill()
@@ -45,7 +36,7 @@ namespace AcadParalelo
             if (!AskOptions(ed)) return;
 
             var sw = Stopwatch.StartNew();
-            var d = ReadLines(doc.Database, ids, sIgnoreLayer);
+            var d = Lector.LeerLineas(doc.Database, ids, sIgnoreLayer);
             double tRead = sw.Elapsed.TotalSeconds;
             var tm = new Dictionary<string, double>();
             var res = Overkill.Run(d.L, d.Props, sTol, sE2e, sThreads, tm);
@@ -54,9 +45,10 @@ namespace AcadParalelo
             double tTotal = sw.Elapsed.TotalSeconds;
 
             Informe.Escribir($"\nPOVERKILL ({Settings()}): {d.L.N} líneas analizadas" +
-                            (d.Skipped > 0 ? $", {d.Skipped} omitidas (capa bloqueada o no planas en XY)" : "") +
+                            (d.Bloqueadas + d.NoPlanas > 0 ? $", omitidas {d.Bloqueadas} en capa bloqueada y {d.NoPlanas} no planas en XY" : "") +
+                            $", {d.Grupos} combinaciones de propiedades" +
                             $".\n  Quedan {kept}: borradas {erased}, alargadas {changed}." +
-                            $"\n  Tiempos: leer {tRead:F3} s (abrir {TOpen:F3}, propiedades {TProps:F3}), calcular {tComp - tRead:F3} s, aplicar {tTotal - tComp:F3} s, total {tTotal:F3} s.\n");
+                            $"\n  Tiempos: leer {tRead:F3} s (abrir {d.TAbrir:F3}, propiedades {d.TPropiedades:F3}), calcular {tComp - tRead:F3} s, aplicar {tTotal - tComp:F3} s, total {tTotal:F3} s.\n");
         }
 
         // POVERKILLBENCH: no modifica el dibujo; mide el cálculo con 1..N hilos y verifica que el resultado sea idéntico
@@ -70,7 +62,7 @@ namespace AcadParalelo
             if (!AskOptions(ed)) return;
 
             var sw = Stopwatch.StartNew();
-            var d = ReadLines(doc.Database, ids, sIgnoreLayer);
+            var d = Lector.LeerLineas(doc.Database, ids, sIgnoreLayer);
             Informe.Escribir($"\nPOVERKILLBENCH ({Settings()}): {d.L.N} líneas, leer {sw.Elapsed.TotalSeconds:F3} s, núcleos {Environment.ProcessorCount}\n");
             var ths = new List<int> { 1 };
             for (int t = 2; t < Environment.ProcessorCount; t *= 2) ths.Add(t);
@@ -138,60 +130,8 @@ namespace AcadParalelo
             return r.Status == PromptStatus.OK ? r.StringResult == "Si" : cur;
         }
 
-        // ------------------------------------------------------------ leer -> copiar
-        static double TOpen, TProps;   // desglose de "leer": abrir objetos / leer propiedades
-
-        static Drawing ReadLines(Database db, ObjectId[] sel, bool ignoreLayer)
-        {
-            var ids = new List<ObjectId>(sel.Length);
-            var x0 = new List<double>(sel.Length); var y0 = new List<double>(sel.Length);
-            var x1 = new List<double>(sel.Length); var y1 = new List<double>(sel.Length);
-            var z = new List<double>(sel.Length); var props = new List<long>(sel.Length);
-            // mismas propiedades -> mismo entero; incluye la elevación para no mezclar planos
-            // por ObjectId y valores, no por nombre: Layer/Linetype/Color como texto abren la tabla en cada línea
-            var keys = new Dictionary<(ObjectId, int, int, ObjectId, double, int, double, Transparency, double), long>();
-            var locked = new Dictionary<ObjectId, bool>();
-            int skipped = 0;
-            // por bloques: con todas las líneas abiertas a la vez la lectura crecía más que lineal (600k 25 s, 1,2M 69 s)
-            const int BLOCK = 20000;
-            var lines = new Line[BLOCK];
-            var sw = new Stopwatch();
-            TOpen = TProps = 0;
-            for (int s0 = 0; s0 < sel.Length; s0 += BLOCK)
-            {
-                int cnt = Math.Min(BLOCK, sel.Length - s0);
-                using var tr = db.TransactionManager.StartOpenCloseTransaction();
-                sw.Restart();
-                for (int j = 0; j < cnt; j++) lines[j] = (Line)tr.GetObject(sel[s0 + j], OpenMode.ForRead);
-                TOpen += sw.Elapsed.TotalSeconds;
-                sw.Restart();
-                for (int j = 0; j < cnt; j++)
-                {
-                    var ln = lines[j];
-                    var layerId = ln.LayerId;
-                    if (!locked.TryGetValue(layerId, out var isLocked))
-                        locked[layerId] = isLocked = ((LayerTableRecord)tr.GetObject(layerId, OpenMode.ForRead)).IsLocked;
-                    Point3d a = ln.StartPoint, b = ln.EndPoint;
-                    if (isLocked || a.Z != b.Z) { skipped++; continue; }
-                    var ec = ln.EntityColor;
-                    var k = (ignoreLayer ? ObjectId.Null : layerId, (int)ec.ColorMethod, ec.TrueColor, ln.LinetypeId, ln.LinetypeScale,
-                             (int)ln.LineWeight, ln.Thickness, ln.Transparency, a.Z);
-                    if (!keys.TryGetValue(k, out var v)) { v = keys.Count; keys[k] = v; }
-                    ids.Add(sel[s0 + j]); x0.Add(a.X); y0.Add(a.Y); x1.Add(b.X); y1.Add(b.Y); z.Add(a.Z); props.Add(v);
-                }
-                tr.Commit();
-                TProps += sw.Elapsed.TotalSeconds;
-            }
-            Array.Clear(lines);
-            return new Drawing
-            {
-                Ids = ids.ToArray(), Z = z.ToArray(), Props = props.ToArray(), Skipped = skipped,
-                L = new Overkill.Lines { N = ids.Count, X0 = x0.ToArray(), Y0 = y0.ToArray(), X1 = x1.ToArray(), Y1 = y1.ToArray() },
-            };
-        }
-
         // ------------------------------------------------------------ reensamblar -> aplicar
-        static (int kept, int erased, int changed) Apply(Database db, Drawing d, int[,] res)
+        static (int kept, int erased, int changed) Apply(Database db, Lector.Lineas d, int[,] res)
         {
             var L = d.L;
             Point3d P(int i, int w) => w == 0 ? new Point3d(L.X0[i], L.Y0[i], d.Z[i]) : new Point3d(L.X1[i], L.Y1[i], d.Z[i]);
