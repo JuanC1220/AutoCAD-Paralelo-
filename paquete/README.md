@@ -51,12 +51,10 @@ persona lo usa con su propia licencia de AutoCAD. El paquete sólo lleva nuestra
 (`AcCoreMgd`, `AcDbMgd`) se usan para compilar pero no se copian (`ExcludeAssets="runtime"`), así que no se
 redistribuye nada de Autodesk.
 
-**Lo que falta decidir:**
+**Lo que hay que cuidar:**
 
-1. **Licencia del código.** El repo no tiene `LICENSE`, y sin ella nadie puede legalmente copiar ni repartir el
-   código o la DLL, aunque el repo sea público. Opciones típicas: MIT (cualquiera lo usa, modifica y reparte,
-   sin garantía), GPL (igual, pero quien lo modifique debe publicar sus cambios), o propietaria (uso gratis o de
-   pago, sin derecho a modificar ni revender).
+1. **Licencia del código: MIT** (archivo `LICENSE` en la raíz). Cualquiera puede usar, modificar y repartir
+   el código y la DLL, gratis o no, siempre que conserve el aviso de copyright; se entrega sin garantía.
 2. **Nombre.** "AutoCAD" es marca de Autodesk: el producto no debe llamarse "AutoCAD algo"; "para AutoCAD" sí
    se puede. Por eso el paquete se llama POverkill.
 3. **Firma digital (opcional, recomendable para otros usuarios).** Con un certificado de firma de código

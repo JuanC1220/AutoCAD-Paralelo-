@@ -7,7 +7,7 @@ Deja en dist/ la carpeta POverkill-<versión>/ y su .zip, listo para compartir:
     POverkill.bundle/PackageContents.xml   lo que lee AutoCAD: versión, AutoCAD compatible, DLL y comandos
     POverkill.bundle/Contents/             la DLL y el LEEME
     instalar.bat / desinstalar.bat         copian o quitan el .bundle en ApplicationPlugins
-    LEEME.txt
+    LEEME.txt, LICENSE.txt
 
 Para otro comando: añadir una entrada a PAQUETES (nombre, comandos, códigos fijos) y armarlo igual.
 """
@@ -66,7 +66,7 @@ Qué hace y qué no
   Revisa el resultado antes de guardar sobre un plano importante.
 
 Requisitos: AutoCAD 2027 para Windows (no AutoCAD LT, que no admite plugins .NET).
-Código, licencia y versiones: """ + REPO + """
+Licencia MIT, sin garantía. Código y versiones: """ + REPO + """
 """,
     ),
 }
@@ -121,6 +121,7 @@ def main():
     (cont.parent / "PackageContents.xml").write_text(package_contents(p, a.version), encoding="utf-8")
     for f in (AQUI / "plantilla").iterdir():
         shutil.copy2(f, raiz / f.name)
+    shutil.copy2(AQUI.parent / "LICENSE", raiz / "LICENSE.txt")
 
     zpath = raiz.parent / (raiz.name + ".zip")
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
