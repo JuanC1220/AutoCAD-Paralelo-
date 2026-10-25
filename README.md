@@ -5,6 +5,8 @@ Primer caso: OVERKILL sobre LINE en archivos DXF.
 
 Receta: leer -> copiar -> calcular en paralelo -> reensamblar -> escribir.
 
+Para instalar un plugin en AutoCAD sin NETLOAD (paquete con instalador y cómo compartirlo): ver `paquete/`.
+
 ```bash
 pip install ezdxf numpy
 cd overkill

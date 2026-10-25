@@ -2,3 +2,4 @@ __pycache__/
 *.dxf
 bin/
 obj/
+paquete/dist/
