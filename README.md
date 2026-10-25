@@ -46,3 +46,11 @@ Nube, 4 núcleos, 600.397 líneas (sólo cálculo): 1 hilo 0,256 s, 4 hilos 0,07
 
 Comandos paralelos dentro de AutoCAD (`NETLOAD AcadParalelo.dll`): `POVERKILL`, `POVERKILLBENCH` y `PHATCHMEDIR`
 (mide dónde se va el tiempo de HATCH). Mismo núcleo que `overkill_cs/` (`OverkillCore.cs`). Ver `acad_paralelo/README.md`.
+
+## Contornos de HATCH (hatch_cs/)
+
+`ContornosCore.cs` calcula, sin AutoCAD, el contorno (y las islas) que HATCH encontraría para cada punto interior:
+rejilla espacial → cruces por celda en paralelo → grafo plano → caras → un rayo por punto en paralelo.
+`HatchCs` lo prueba con DXF de `acad_paralelo/pruebas/gen_hatch_dxf.py` (rejillas, islas, diagonales) comparando
+áreas con `<dxf>.esperado.txt` y la huella con 1 y N hilos. Nube, 4 núcleos: 90.000 celdas con islas y diagonales
+(284.829 líneas) en 0,52 s, todas correctas; en 2.500 celdas AutoCAD tarda 32,7 s sólo en detectar contornos.

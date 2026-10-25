@@ -108,6 +108,31 @@ else {
     [void]$sb.Append($vars + "(setq t0 (getvar `"MILLISECS`"))`n_.-HATCH`n_P`nANSI31`n1`n0`n$($pts[0])`n`n")
     foreach ($p in $pts[1..($pts.Count - 1)]) { [void]$sb.Append("_.-HATCH`n$p`n`n") }
     Correr 'hatch_nativo' ($sb.ToString() + (& $anota 'hatch_nativo' 'HATCH') + "`n" + $fin)
+    foreach ($t in $Hilos) {
+        Correr "phatch_$($t)hilos" ($cargar + $vars + @"
+(setq t0 (getvar "MILLISECS"))
+PHATCH
+Hilos
+$t
+Puntos
+_ALL
+
+
+
+"@ + (& $anota "phatch_$($t)hilos" 'HATCH') + "`n" + $fin)
+    }
+    # PHATCH comparando cada contorno con el de AutoCAD (TraceBoundary)
+    Correr 'phatch_verificar' ($cargar + $vars + @"
+(setq t0 (getvar "MILLISECS"))
+PHATCH
+Verificar
+Si
+Puntos
+_ALL
+
+
+
+"@ + (& $anota 'phatch_verificar' 'HATCH') + "`n" + $fin)
     Correr 'phatchmedir' ($cargar + $vars + @"
 (setq t0 (getvar "MILLISECS"))
 PHATCHMEDIR

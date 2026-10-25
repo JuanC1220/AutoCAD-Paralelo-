@@ -12,6 +12,7 @@
   <ItemGroup>
     <!-- el mismo núcleo que el programa de consola: mismas reglas, mismo resultado -->
     <Compile Include="..\overkill_cs\OverkillCore.cs" Link="OverkillCore.cs" />
+    <Compile Include="..\hatch_cs\ContornosCore.cs" Link="ContornosCore.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- sólo AcCoreMgd + AcDbMgd: nada de interfaz, así carga también en accoreconsole -->
