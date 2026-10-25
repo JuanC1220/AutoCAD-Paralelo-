@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Autodesk.AutoCAD.ApplicationServices.Core;
+using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Autodesk.AutoCAD.Geometry;
@@ -55,7 +56,7 @@ namespace AcadParalelo
             Informe.Escribir($"\nPOVERKILL ({Settings()}): {d.L.N} líneas analizadas" +
                             (d.Skipped > 0 ? $", {d.Skipped} omitidas (capa bloqueada o no planas en XY)" : "") +
                             $".\n  Quedan {kept}: borradas {erased}, alargadas {changed}." +
-                            $"\n  Tiempos: leer {tRead:F3} s, calcular {tComp - tRead:F3} s, aplicar {tTotal - tComp:F3} s, total {tTotal:F3} s.\n");
+                            $"\n  Tiempos: leer {tRead:F3} s (abrir {TOpen:F3}, propiedades {TProps:F3}), calcular {tComp - tRead:F3} s, aplicar {tTotal - tComp:F3} s, total {tTotal:F3} s.\n");
         }
 
         // POVERKILLBENCH: no modifica el dibujo; mide el cálculo con 1..N hilos y verifica que el resultado sea idéntico
@@ -138,6 +139,8 @@ namespace AcadParalelo
         }
 
         // ------------------------------------------------------------ leer -> copiar
+        static double TOpen, TProps;   // desglose de "leer": abrir objetos / leer propiedades
+
         static Drawing ReadLines(Database db, ObjectId[] sel, bool ignoreLayer)
         {
             var ids = new List<ObjectId>(sel.Length);
@@ -145,23 +148,31 @@ namespace AcadParalelo
             var x1 = new List<double>(sel.Length); var y1 = new List<double>(sel.Length);
             var z = new List<double>(sel.Length); var props = new List<long>(sel.Length);
             // mismas propiedades -> mismo entero; incluye la elevación para no mezclar planos
-            var keys = new Dictionary<(string, string, string, double, int, double, string, double), long>();
+            // por ObjectId y valores, no por nombre: Layer/Linetype/Color como texto abren la tabla en cada línea
+            var keys = new Dictionary<(ObjectId, int, int, ObjectId, double, int, double, Transparency, double), long>();
             var locked = new Dictionary<ObjectId, bool>();
             int skipped = 0;
+            var sw = Stopwatch.StartNew();
             using (var tr = db.TransactionManager.StartOpenCloseTransaction())
             {
-                foreach (var id in sel)
+                var lines = new Line[sel.Length];
+                for (int i = 0; i < sel.Length; i++) lines[i] = (Line)tr.GetObject(sel[i], OpenMode.ForRead);
+                TOpen = sw.Elapsed.TotalSeconds;
+                for (int i = 0; i < sel.Length; i++)
                 {
-                    var ln = (Line)tr.GetObject(id, OpenMode.ForRead);
-                    if (!locked.TryGetValue(ln.LayerId, out var isLocked))
-                        locked[ln.LayerId] = isLocked = ((LayerTableRecord)tr.GetObject(ln.LayerId, OpenMode.ForRead)).IsLocked;
+                    var ln = lines[i];
+                    var layerId = ln.LayerId;
+                    if (!locked.TryGetValue(layerId, out var isLocked))
+                        locked[layerId] = isLocked = ((LayerTableRecord)tr.GetObject(layerId, OpenMode.ForRead)).IsLocked;
                     Point3d a = ln.StartPoint, b = ln.EndPoint;
                     if (isLocked || a.Z != b.Z) { skipped++; continue; }
-                    var k = (ignoreLayer ? "" : ln.Layer, ln.Color.ToString(), ln.Linetype, ln.LinetypeScale,
-                             (int)ln.LineWeight, ln.Thickness, ln.Transparency.ToString(), a.Z);
+                    var ec = ln.EntityColor;
+                    var k = (ignoreLayer ? ObjectId.Null : layerId, (int)ec.ColorMethod, ec.TrueColor, ln.LinetypeId, ln.LinetypeScale,
+                             (int)ln.LineWeight, ln.Thickness, ln.Transparency, a.Z);
                     if (!keys.TryGetValue(k, out var v)) { v = keys.Count; keys[k] = v; }
-                    ids.Add(id); x0.Add(a.X); y0.Add(a.Y); x1.Add(b.X); y1.Add(b.Y); z.Add(a.Z); props.Add(v);
+                    ids.Add(sel[i]); x0.Add(a.X); y0.Add(a.Y); x1.Add(b.X); y1.Add(b.Y); z.Add(a.Z); props.Add(v);
                 }
+                TProps = sw.Elapsed.TotalSeconds - TOpen;
                 tr.Commit();
             }
             return new Drawing
