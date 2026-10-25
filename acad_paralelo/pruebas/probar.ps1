@@ -21,7 +21,10 @@ $dxf = (Resolve-Path $Dxf).Path
 $base = [IO.Path]::GetFileNameWithoutExtension($dxf)
 $out = Join-Path $PSScriptRoot "resultados\$base"
 New-Item -ItemType Directory -Force $out | Out-Null
-$dllL = (Resolve-Path $Dll).Path -replace '\\', '/'
+# AutoCAD bloquea el DLL que carga: se carga una copia temporal para que el original se pueda reemplazar siempre
+$sombra = Join-Path $env:TEMP ("AcadParalelo_" + [Guid]::NewGuid().ToString('N') + '.dll')
+Copy-Item (Resolve-Path $Dll).Path $sombra
+$dllL = $sombra -replace '\\', '/'
 
 $cargar = @"
 (setq sl (getvar "SECURELOAD"))

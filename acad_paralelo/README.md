@@ -44,4 +44,11 @@ python pruebas\gen_hatch_dxf.py --k 50 --out h50.dxf
 powershell -ExecutionPolicy Bypass -File pruebas\probar.ps1 -Modo hatch -Dxf h50.dxf
 ```
 
-Los resultados quedan en `pruebas/resultados/<dxf>/`.
+Los resultados quedan en `pruebas/resultados/<dxf>/`. `probar.ps1` carga una copia temporal del DLL, así el original
+nunca queda bloqueado por AutoCAD y se puede reemplazar aunque haya una prueba corriendo.
+
+Para instalar una versión nueva del DLL (fijada a un commit, con huella comprobada):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File pruebas\instalar_dll.ps1 -Commit <sha del commit> -Sha256 <huella>
+```
