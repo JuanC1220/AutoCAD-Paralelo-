@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using Autodesk.AutoCAD.ApplicationServices.Core;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
@@ -42,6 +43,7 @@ namespace AcadParalelo
             double suma = 0;
             void Abrir(string nombre, int bloque, bool openClose)
             {
+                int g2 = GC.CollectionCount(2);
                 sw.Restart();
                 for (int s0 = 0; s0 < ids.Length; s0 += bloque)
                 {
@@ -50,7 +52,7 @@ namespace AcadParalelo
                     for (int j = 0; j < cnt; j++) suma += ((Line)tr.GetObject(ids[s0 + j], OpenMode.ForRead)).StartPoint.X;
                     tr.Commit();
                 }
-                res.Add($"{nombre}: {T():F3} s");
+                res.Add($"{nombre}: {T():F3} s (recolecciones GC gen2 {GC.CollectionCount(2) - g2})");
             }
 
             // 2) abrir (sólo StartPoint): la primera pasada calienta la caché de AutoCAD
@@ -88,6 +90,38 @@ namespace AcadParalelo
                 tr.Commit();
             }
             res.Add($"propiedades como texto (versión 1): {T():F3} s");
+
+            // 4) sin abrir objetos: AutoCAD escribe el dibujo como DXF y lo leemos como texto (handle -> ObjectId)
+            string tmp = Path.Combine(Path.GetTempPath(), $"acadparalelo_{Guid.NewGuid():N}.dxf");
+            try
+            {
+                sw.Restart();
+                db.DxfOut(tmp, 16, DwgVersion.Current);
+                res.Add($"DXFOUT a archivo temporal: {T():F3} s, {new FileInfo(tmp).Length / 1e6:F0} MB");
+                var handles = new List<long>(ids.Length);
+                string sec = null; bool inLine = false; string prev = null; int lineas = 0;
+                foreach (var raw in File.ReadLines(tmp))
+                {
+                    if (prev == null) { prev = raw; continue; }
+                    string code = prev.Trim(), val = raw.Trim(); prev = null;
+                    if (code == "0")
+                    {
+                        inLine = sec == "ENTITIES" && val == "LINE";
+                        if (inLine) lineas++;
+                        if (val == "ENDSEC") sec = null;
+                    }
+                    else if (code == "2" && sec == null) sec = val;
+                    else if (inLine && code == "5") handles.Add(Convert.ToInt64(val, 16));
+                    else if (inLine && (code == "10" || code == "20" || code == "11" || code == "21"))
+                        suma += double.Parse(val, System.Globalization.CultureInfo.InvariantCulture);
+                }
+                res.Add($"leer el DXF como texto: {T():F3} s, {lineas} LINE");
+                int ok = 0;
+                foreach (var hh in handles) if (db.TryGetObjectId(new Handle(hh), out var oid) && oid.ObjectClass == lineClass) ok++;
+                res.Add($"handle -> ObjectId: {T():F3} s, {ok} encontrados");
+            }
+            catch (System.Exception ex) { res.Add($"DXFOUT falló: {ex.Message}"); }
+            finally { try { File.Delete(tmp); } catch (System.Exception) { } }
 
             Informe.Escribir($"\nPLEERMEDIR ({ids.Length} líneas, control {suma + h:G3}):\n  " + string.Join("\n  ", res) + "\n");
         }
