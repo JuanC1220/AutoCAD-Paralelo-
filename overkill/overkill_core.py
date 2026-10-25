@@ -1,0 +1,262 @@
+"""OVERKILL simplificado para LINE: versión secuencial de referencia y versión paralela.
+
+Receta: leer -> copiar -> calcular en paralelo -> reensamblar -> escribir.
+
+Semántica (equivalente a OVERKILL con las opciones por defecto, sólo LINE):
+  * Tolerancia = precisión numérica: cada coordenada se redondea a la rejilla `tol`
+    (como hace OVERKILL al "comparar con esa precisión"). Tras el redondeo todo es
+    aritmética entera exacta, así que no hay errores de redondeo ni fronteras.
+  * Dos líneas son candidatas si tienen las mismas propiedades (capa, color, tipo de
+    línea, salvo las ignoradas) y están sobre la misma recta portadora.
+  * Sobre cada recta los segmentos son intervalos 1D. Se fusionan si se solapan
+    (siempre) o si se tocan extremo con extremo (opción `end_to_end`).
+  * De cada grupo fusionado sobrevive la entidad que aparece primero en el archivo;
+    sus extremos pasan a ser los extremos reales más lejanos del grupo (coordenadas
+    originales, sin recalcular) y conserva su orientación. El resto se borra.
+
+La clave de recta portadora es exacta y hashable, así que el paralelismo es por
+particiones de clave (hash), no por zonas del dibujo: una recta entera cae siempre
+en un mismo trabajador y no existen "bordes" que coser.
+"""
+import hashlib
+import math
+import multiprocessing as mp
+from collections import defaultdict
+
+PROPS = ("layer", "color", "linetype")
+
+
+# ---------------------------------------------------------------- leer / copiar
+class Lines:
+    """Copia plana (columnar) de las LINE del DXF. Es lo único que ven los cálculos."""
+
+    def __init__(self):
+        self.handle, self.layer, self.color, self.linetype = [], [], [], []
+        self.x0, self.y0, self.x1, self.y1 = [], [], [], []
+        self.layers = []          # nombres de capa (para escribir)
+
+    def freeze(self):
+        """Copia columnar en numpy (para la partición vectorizada)."""
+        import numpy as np
+        self.np = {k: np.asarray(getattr(self, k), dtype=np.float64) for k in ("x0", "y0", "x1", "y1")}
+
+    def __len__(self):
+        return len(self.x0)
+
+
+def read_lines(path):
+    """Lector rápido del ENTITIES de un DXF ASCII; sólo LINE, en orden de archivo."""
+    L = Lines()
+    with open(path, encoding="utf-8", errors="replace") as f:
+        rows = f.read().split("\n")
+    n = len(rows) - 1
+    i = 0
+    section = None
+    cur = None
+
+    def flush(c):
+        if c is not None:
+            L.handle.append(c.get(5, ""))
+            L.layer.append(c.get(8, "0"))
+            L.color.append(int(c.get(62, 256)))
+            L.linetype.append(c.get(6, "BYLAYER"))
+            L.x0.append(float(c[10])); L.y0.append(float(c[20]))
+            L.x1.append(float(c[11])); L.y1.append(float(c[21]))
+
+    while i < n:
+        code = int(rows[i]); val = rows[i + 1].strip(); i += 2
+        if code == 0:
+            if cur is not None:
+                flush(cur); cur = None
+            if val == "SECTION":
+                section = rows[i + 1].strip(); i += 2
+            elif val == "ENDSEC":
+                section = None
+            elif section == "ENTITIES" and val == "LINE":
+                cur = {}
+        elif cur is not None and code in (5, 8, 62, 6, 10, 20, 11, 21):
+            cur[code] = val
+    L.layers = sorted(set(L.layer))
+    L.freeze()
+    return L
+
+
+def encode_props(L, ignore=()):
+    """Propiedades -> un entero por entidad (estable entre procesos). Array numpy."""
+    import numpy as np
+    code = np.zeros(len(L), dtype=np.int64)
+    for p in PROPS:
+        if p in ignore:
+            continue
+        uniq, inv = np.unique(np.asarray(getattr(L, p), dtype=str), return_inverse=True)
+        code = code * (len(uniq) + 1) + inv
+    return code
+
+
+# ---------------------------------------------------------------- cálculo
+def carrier(prop, x0, y0, x1, y1, tol):
+    """-> (clave_recta, t0, t1). Enteros exactos tras redondear a la rejilla tol."""
+    X0, Y0 = round(x0 / tol), round(y0 / tol)
+    X1, Y1 = round(x1 / tol), round(y1 / tol)
+    dx, dy = X1 - X0, Y1 - Y0
+    if dx == 0 and dy == 0:                       # línea de longitud cero
+        return (prop, 0, 0, X0, Y0), 0, 0
+    g = math.gcd(dx, dy)
+    ux, uy = dx // g, dy // g
+    if uy < 0 or (uy == 0 and ux < 0):          # dirección canónica
+        ux, uy = -ux, -uy
+    c = ux * Y0 - uy * X0                        # desplazamiento de la recta
+    return (prop, ux, uy, c), ux * X0 + uy * Y0, ux * X1 + uy * Y1
+
+
+def sweep(items, end_to_end):
+    """items: [(tmin, tmax, idx, end_min, end_max)] de una misma recta.
+    end_* = (idx, 0|1) el extremo real que da ese t.
+    Devuelve [(sobreviviente, extremo_min, extremo_max)]."""
+    items.sort()
+    out = []
+    s_min, s_max, surv, e_min, e_max = items[0]
+    for tmin, tmax, idx, emin, emax in items[1:]:
+        touch = tmin < s_max or (end_to_end and tmin == s_max)
+        if touch:
+            if tmin == s_min and emin[0] < e_min[0]:
+                e_min = emin
+            if tmax > s_max or (tmax == s_max and emax[0] < e_max[0]):
+                e_max = emax
+            s_max = max(s_max, tmax)
+            surv = min(surv, idx)
+        else:
+            out.append((surv, e_min, e_max))
+            s_min, s_max, surv, e_min, e_max = tmin, tmax, idx, emin, emax
+    out.append((surv, e_min, e_max))
+    return out
+
+
+def item(i, prop, x0, y0, x1, y1, tol):
+    key, t0, t1 = carrier(prop, x0, y0, x1, y1, tol)
+    if t0 <= t1:
+        return key, (t0, t1, i, (i, 0), (i, 1))
+    return key, (t1, t0, i, (i, 1), (i, 0))
+
+
+# ---------------------------------------------------------------- secuencial (referencia)
+def overkill_seq(L, tol=1e-6, end_to_end=False, ignore=()):
+    props = encode_props(L, ignore).tolist()
+    groups = defaultdict(list)
+    for i in range(len(L)):
+        key, it = item(i, props[i], L.x0[i], L.y0[i], L.x1[i], L.y1[i], tol)
+        groups[key].append(it)
+    res = [(surv, a, wa, b, wb) for items in groups.values()
+           for surv, (a, wa), (b, wb) in sweep(items, end_to_end)]
+    res.sort()
+    return res
+
+
+# ---------------------------------------------------------------- paralelo
+_G = {}   # estado heredado por fork (copia en escritura, sin serializar la entrada)
+_M = 2147483647   # primo 2^31-1: c mod _M cabe en int64 sin desbordar
+
+
+def partition_ids(L, props, tol, nparts):
+    """Partición de cada entidad = hash(clave de recta) mod nparts, vectorizado.
+
+    Usa la misma aritmética que `carrier` (redondeo, mcd, dirección canónica) pero
+    con el desplazamiento c tomado módulo un primo, así que dos líneas sobre la misma
+    recta exacta caen SIEMPRE en la misma partición. Coste: milisegundos."""
+    import numpy as np
+    A = L.np
+    X0 = np.rint(A["x0"] / tol).astype(np.int64)
+    Y0 = np.rint(A["y0"] / tol).astype(np.int64)
+    dx = np.rint(A["x1"] / tol).astype(np.int64) - X0
+    dy = np.rint(A["y1"] / tol).astype(np.int64) - Y0
+    g = np.gcd(dx, dy)
+    zero = g == 0
+    g[zero] = 1
+    ux, uy = dx // g, dy // g
+    flip = (uy < 0) | ((uy == 0) & (ux < 0))
+    ux[flip] *= -1
+    uy[flip] *= -1
+    c = ((ux % _M) * (Y0 % _M) - (uy % _M) * (X0 % _M)) % _M
+    c[zero] = ((X0[zero] % _M) * 1000003 + Y0[zero] % _M) % _M   # puntos: por posición
+    h = c
+    for col in (ux % _M, uy % _M, props % _M):
+        h = (h * 1000003 + col) % _M
+    return h % nparts
+
+
+def _work(j):
+    """Un trabajador: todas las rectas de su partición, de principio a fin."""
+    L, props, tol, e2e = _G["L"], _G["props"], _G["tol"], _G["e2e"]
+    x0, y0, x1, y1 = L.x0, L.y0, L.x1, L.y1
+    groups = defaultdict(list)
+    for i in _G["parts"][j]:
+        key, it = item(i, props[i], x0[i], y0[i], x1[i], y1[i], tol)
+        groups[key].append(it)
+    flat = []                       # salida plana: enteros sueltos serializan rápido
+    for items in groups.values():
+        for surv, (a, wa), (b, wb) in sweep(items, e2e):
+            flat += (surv, a, wa, b, wb)
+    return flat
+
+
+def overkill_par(L, workers=4, tol=1e-6, end_to_end=False, ignore=(), timings=None):
+    import time
+    import numpy as np
+    t = time.perf_counter()
+    props = encode_props(L, ignore)
+    nparts = workers * 4                        # más partes que hilos = mejor reparto
+    pid = partition_ids(L, props, tol, nparts)
+    order = np.argsort(pid, kind="stable")
+    cuts = np.searchsorted(pid[order], np.arange(1, nparts))
+    parts = [p.tolist() for p in np.split(order, cuts)]
+    _G.update(L=L, props=props.tolist(), tol=tol, e2e=end_to_end, parts=parts)
+    t1 = time.perf_counter()
+    # calcular en paralelo: cada partición es independiente (sin bordes que coser)
+    with mp.get_context("fork").Pool(workers) as pool:
+        outs = pool.map(_work, sorted(range(nparts), key=lambda j: -len(parts[j])), chunksize=1)
+    t2 = time.perf_counter()
+    # reensamblar: orden determinista por índice de entidad original
+    flat = np.concatenate([np.asarray(f, dtype=np.int64) for f in outs]).reshape(-1, 5)
+    res = flat[np.argsort(flat[:, 0])].tolist()
+    _G.clear()
+    if timings is not None:
+        timings.update(partition=t1 - t, compute=t2 - t1, reassemble=time.perf_counter() - t2)
+    return res
+
+
+# ---------------------------------------------------------------- escribir / comparar
+def endpoint(L, i, which):
+    return (L.x0[i], L.y0[i]) if which == 0 else (L.x1[i], L.y1[i])
+
+
+def result_lines(L, res):
+    """res: filas (sobreviviente, i_min, extremo_min, i_max, extremo_max) ordenadas.
+    Devuelve líneas finales (handle, capa, color, tipo, p0, p1) en orden de archivo."""
+    out = []
+    for surv, a, wa, b, wb in res:
+        a, b = endpoint(L, a, wa), endpoint(L, b, wb)
+        # conservar orientación del sobreviviente
+        forward = ((L.x1[surv] - L.x0[surv]) * (b[0] - a[0])
+                   + (L.y1[surv] - L.y0[surv]) * (b[1] - a[1])) >= 0
+        p0, p1 = (a, b) if forward else (b, a)
+        out.append((L.handle[surv], L.layer[surv], L.color[surv], L.linetype[surv], p0, p1))
+    return out
+
+
+def fingerprint(lines):
+    h = hashlib.sha256()
+    for r in lines:
+        h.update(repr(r).encode())
+    return h.hexdigest()
+
+
+def write_dxf(path, layers, lines):
+    import ezdxf
+    doc = ezdxf.new("R2010")
+    for name in layers:
+        if name not in doc.layers:
+            doc.layers.add(name)
+    msp = doc.modelspace()
+    for _h, layer, color, lt, p0, p1 in lines:
+        msp.add_line(p0, p1, dxfattribs={"layer": layer, "color": color, "linetype": lt})
+    doc.saveas(path)
