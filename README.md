@@ -41,3 +41,8 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 ```
 
 Nube, 4 núcleos, 600.397 líneas (sólo cálculo): 1 hilo 0,256 s, 4 hilos 0,073 s (Python: 3,3 s y 1,5 s).
+
+## Plugin de AutoCAD 2027 (acad_paralelo/)
+
+Comandos paralelos dentro de AutoCAD (`NETLOAD AcadParalelo.dll`): `POVERKILL`, `POVERKILLBENCH` y `PHATCHMEDIR`
+(mide dónde se va el tiempo de HATCH). Mismo núcleo que `overkill_cs/` (`OverkillCore.cs`). Ver `acad_paralelo/README.md`.
