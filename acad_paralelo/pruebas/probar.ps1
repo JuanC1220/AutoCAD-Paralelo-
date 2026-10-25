@@ -2,8 +2,10 @@
 # No toca tus dibujos; los ajustes que cambia (SECURELOAD, OSMODE, HPASSOC) se devuelven a su valor al terminar.
 #   powershell -ExecutionPolicy Bypass -File probar.ps1 -Modo overkill -Dxf s400k.dxf [-Hilos 1,16,32] [-TimeoutMin 30]
 #   powershell -ExecutionPolicy Bypass -File probar.ps1 -Modo hatch -Dxf h50.dxf     (h50.puntos.txt al lado)
+#   powershell -ExecutionPolicy Bypass -File probar.ps1 -Modo extremo -Dxf extremo_600k.dxf   (POVERKILL y conteo por capa -> .csv
+#     para verificar_extremo.py --csv ... --e2e)
 param(
-    [Parameter(Mandatory)][ValidateSet('overkill', 'hatch', 'leer')][string]$Modo,
+    [Parameter(Mandatory)][ValidateSet('overkill', 'hatch', 'leer', 'extremo')][string]$Modo,
     [Parameter(Mandatory)][string]$Dxf,
     [string[]]$Hilos = @('1', [Environment]::ProcessorCount),
     [string]$Dll = '',
@@ -56,7 +58,14 @@ function Correr([string]$nombre, [string]$cuerpo) {
 
 $anota = { param($etq, $tipo) "(setq f (open `"@RES@`" `"w`"))(write-line (strcat `"$etq`: `" (itoa (sslength (ssget `"_X`" '((0 . `"$tipo`"))))) `" $tipo, `" (itoa (- (getvar `"MILLISECS`") t0)) `" ms`") f)(close f)" }
 
-if ($Modo -eq 'leer') {
+if ($Modo -eq 'extremo') {
+    # POVERKILL (tolerancia 1e-6, extremo con extremo Sí) y conteo de entidades por capa en <resultados>\poverkill_extremo.csv
+    $csv = ((Join-Path $out 'poverkill_extremo.csv') -replace '\\', '/')
+    $lsp = '(setq f (open "' + $csv + '" "w") L (tblnext "LAYER" T))' +
+           '(while L (setq s (ssget "_X" (list (cons 8 (cdr (assoc 2 L)))))) (write-line (strcat (cdr (assoc 2 L)) ";" (itoa (if s (sslength s) 0))) f) (setq L (tblnext "LAYER")))(close f)'
+    Correr 'poverkill_extremo' ($cargar + "(setq t0 (getvar `"MILLISECS`"))`nPOVERKILL`n_ALL`n`n`n`n" + (& $anota 'poverkill_extremo' 'LINE') + "`n" + $lsp + "`n")
+}
+elseif ($Modo -eq 'leer') {
     # compara formas de leer las LINE (no modifica el dibujo)
     Correr 'pleermedir' ($cargar + "(setq t0 (getvar `"MILLISECS`"))`nPLEERMEDIR`n`n" + (& $anota 'pleermedir' 'LINE'))
 }

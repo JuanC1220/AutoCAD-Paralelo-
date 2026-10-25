@@ -9,7 +9,7 @@ Comandos de AutoCAD que hacen su cálculo en varios hilos. Todos siguen la misma
 
 | Comando | Qué hace |
 |---|---|
-| `POVERKILL` | OVERKILL paralelo sobre LINE. Mismo núcleo que `overkill_cs/` (modo AutoCAD): mismo resultado con 1 o N hilos. Opciones: Hilos, Tolerancia, Capa (ignorar capa), Extremo (extremo con extremo). |
+| `POVERKILL` | OVERKILL paralelo sobre LINE (3D), ARC, CIRCLE y LWPOLYLINE con el núcleo `overkill/v2/cs/OverkillV2Core.cs` (tolerancia geométrica real; 100 % en el dibujo extremo). Opciones: Hilos, Tolerancia, Capa (ignorar capa), Extremo (extremo con extremo). |
 | `POVERKILLBENCH` | No modifica el dibujo: mide el cálculo con 1, 2, 4, … hilos y comprueba que el resultado sea idéntico (huella SHA-256). |
 | `PLEERMEDIR` | No modifica el dibujo: compara formas de leer las LINE (seleccionar, recorrer el espacio, abrir por bloques de distintos tamaños, transacción normal, `ObjectId.Open`, propiedades como texto) para elegir la más rápida. |
 | `PHATCH` | Sombrea muchas áreas a la vez: un punto interior por área (clics, o `Puntos` para seleccionar POINT). Analiza el dibujo una sola vez y busca los contornos en paralelo (`hatch_cs/ContornosCore.cs`). Contorno: LINE y polilíneas de tramos rectos visibles; islas en estilo Exterior. Opciones: Patron, Escala, Angulo, Hilos, Verificar (compara cada contorno con TraceBoundary de AutoCAD). |
@@ -40,6 +40,8 @@ En AutoCAD: `NETLOAD` y elegir `AcadParalelo.dll`.
 powershell -ExecutionPolicy Bypass -File pruebas\probar.ps1 -Modo overkill -Dxf s400k.dxf -Hilos 1,16,32   # -SoloPoverkill
 # formas de leer el dibujo
 powershell -ExecutionPolicy Bypass -File pruebas\probar.ps1 -Modo leer -Dxf s400k.dxf
+# POVERKILL sobre el dibujo extremo y conteo por capa (luego overkill/extremo/verificar_extremo.py --csv ... --e2e)
+powershell -ExecutionPolicy Bypass -File pruebas\probar.ps1 -Modo extremo -Dxf extremo_600k.dxf
 # HATCH: rejilla de celdas con un punto interior en cada una
 python pruebas\gen_hatch_dxf.py --k 50 --out h50.dxf
 powershell -ExecutionPolicy Bypass -File pruebas\probar.ps1 -Modo hatch -Dxf h50.dxf

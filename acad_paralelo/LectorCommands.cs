@@ -74,7 +74,7 @@ namespace AcadParalelo
 
             // 3) costo de las propiedades (bloques de 20000)
             sw.Restart();
-            var d = Lector.LeerLineas(db, ids, false);
+            var d = Lector.LeerEntidades(db, ids, false);
             res.Add($"lector completo (uno a uno, ids y valores): {T():F3} s, {d.Grupos} combinaciones");
             sw.Restart();
             long h = 0;

@@ -11,7 +11,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- el mismo núcleo que el programa de consola: mismas reglas, mismo resultado -->
-    <Compile Include="..\overkill_cs\OverkillCore.cs" Link="OverkillCore.cs" />
+    <Compile Include="..\overkill\v2\cs\OverkillV2Core.cs" Link="OverkillV2Core.cs" />
     <Compile Include="..\hatch_cs\ContornosCore.cs" Link="ContornosCore.cs" />
   </ItemGroup>
   <ItemGroup>
