@@ -152,15 +152,22 @@ namespace AcadParalelo
             var keys = new Dictionary<(ObjectId, int, int, ObjectId, double, int, double, Transparency, double), long>();
             var locked = new Dictionary<ObjectId, bool>();
             int skipped = 0;
-            var sw = Stopwatch.StartNew();
-            using (var tr = db.TransactionManager.StartOpenCloseTransaction())
+            // por bloques: con todas las líneas abiertas a la vez la lectura crecía más que lineal (600k 25 s, 1,2M 69 s)
+            const int BLOCK = 20000;
+            var lines = new Line[BLOCK];
+            var sw = new Stopwatch();
+            TOpen = TProps = 0;
+            for (int s0 = 0; s0 < sel.Length; s0 += BLOCK)
             {
-                var lines = new Line[sel.Length];
-                for (int i = 0; i < sel.Length; i++) lines[i] = (Line)tr.GetObject(sel[i], OpenMode.ForRead);
-                TOpen = sw.Elapsed.TotalSeconds;
-                for (int i = 0; i < sel.Length; i++)
+                int cnt = Math.Min(BLOCK, sel.Length - s0);
+                using var tr = db.TransactionManager.StartOpenCloseTransaction();
+                sw.Restart();
+                for (int j = 0; j < cnt; j++) lines[j] = (Line)tr.GetObject(sel[s0 + j], OpenMode.ForRead);
+                TOpen += sw.Elapsed.TotalSeconds;
+                sw.Restart();
+                for (int j = 0; j < cnt; j++)
                 {
-                    var ln = lines[i];
+                    var ln = lines[j];
                     var layerId = ln.LayerId;
                     if (!locked.TryGetValue(layerId, out var isLocked))
                         locked[layerId] = isLocked = ((LayerTableRecord)tr.GetObject(layerId, OpenMode.ForRead)).IsLocked;
@@ -170,11 +177,12 @@ namespace AcadParalelo
                     var k = (ignoreLayer ? ObjectId.Null : layerId, (int)ec.ColorMethod, ec.TrueColor, ln.LinetypeId, ln.LinetypeScale,
                              (int)ln.LineWeight, ln.Thickness, ln.Transparency, a.Z);
                     if (!keys.TryGetValue(k, out var v)) { v = keys.Count; keys[k] = v; }
-                    ids.Add(sel[i]); x0.Add(a.X); y0.Add(a.Y); x1.Add(b.X); y1.Add(b.Y); z.Add(a.Z); props.Add(v);
+                    ids.Add(sel[s0 + j]); x0.Add(a.X); y0.Add(a.Y); x1.Add(b.X); y1.Add(b.Y); z.Add(a.Z); props.Add(v);
                 }
-                TProps = sw.Elapsed.TotalSeconds - TOpen;
                 tr.Commit();
+                TProps += sw.Elapsed.TotalSeconds;
             }
+            Array.Clear(lines);
             return new Drawing
             {
                 Ids = ids.ToArray(), Z = z.ToArray(), Props = props.ToArray(), Skipped = skipped,
