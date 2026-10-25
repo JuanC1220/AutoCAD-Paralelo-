@@ -16,13 +16,14 @@ En AutoCAD 2027 real, PC con Ryzen 9 5950X (16 núcleos / 32 hilos):
 | Herramienta | Caso | AutoCAD | Esta herramienta | Estado |
 |---|---|---|---|---|
 | Limpieza por lotes (AUDIT + PURGE) | 32 DWG | 103,7 s | **18,5 s** (5,6×) | ✅ lista: [`lotes/`](lotes/) |
-| `POVERKILL` (plugin) | 1,2 millones de líneas | 9,8 s | **6,3 s** | ✅ instalable: [`paquete/`](paquete/) |
-| `PHATCH` (plugin) | 2.500 áreas con islas | 98,8 s | **2,5 s** (40×) | 🧪 en revisión |
+| `POVERKILL` (plugin) | 1,2 millones de líneas | 9,8 s y deja 50.351 líneas de más | **7,4 s**, exacto | ✅ en [`acad_paralelo/`](acad_paralelo/); paquete [`paquete/`](paquete/) |
+| `PHATCH` (plugin) | 2.500 áreas con islas | 98,8 s | **2,5 s** (40×) | ✅ en [`acad_paralelo/`](acad_paralelo/) |
 | OVERKILL v2 (motor) | 3,1 millones de entidades, 23 tipos de caso difícil | 37,8 s y deja 118.457 entidades de más | **1,2 s**, 100 % exacto | ✅ motor listo: [`overkill/v2/`](overkill/v2/) |
 
-- `POVERKILL` mide el comando completo dentro de AutoCAD (leer, calcular, aplicar). El cálculo en sí baja de
-  0,19 s con 1 hilo a 0,035 s con 16; lo que queda es leer y escribir en el dibujo, que AutoCAD sólo permite
-  desde un hilo.
+- `POVERKILL` mide el comando completo dentro de AutoCAD (selección, leer, calcular, aplicar) y usa el motor
+  OVERKILL v2: LINE, ARC, CIRCLE y LWPOLYLINE con todas sus propiedades. Deja exactamente las líneas esperadas;
+  AutoCAD deja ~5 % de más porque no une tramos alineados extremo con extremo. El cálculo con 32 hilos es 0,6 s;
+  el resto es leer y escribir en el dibujo, que AutoCAD sólo permite desde un hilo.
 - `PHATCH` encuentra los mismos contornos que AutoCAD: 2.500 de 2.500 iguales comparados con `TraceBoundary`.
 - OVERKILL v2 usa la tolerancia como distancia real en 3D y revisa todas las propiedades. Sobre un dibujo de
   prueba hecho para encontrar fallos (coordenadas UTM, Z distinta, capas bloqueadas, arcos, polilíneas...) deja
@@ -34,7 +35,7 @@ En AutoCAD 2027 real, PC con Ryzen 9 5950X (16 núcleos / 32 hilos):
 |---|---|---|
 | [`lotes/`](lotes/) | **Limpieza por lotes**: AUDIT + PURGE sobre una carpeta entera de DWG, varios a la vez, con informe HTML/CSV de cuánto bajó cada archivo. Sólo AutoCAD y PowerShell. | Usuarios de AutoCAD |
 | [`paquete/`](paquete/) | **Instalador** del plugin: un `.bundle` que AutoCAD carga solo al arrancar (sin `NETLOAD`) y un `instalar.bat`. | Usuarios de AutoCAD |
-| `acad_paralelo/` | Plugin .NET para AutoCAD 2027 con `POVERKILL` y `PHATCH` (en revisión). | Desarrolladores |
+| `acad_paralelo/` | Plugin .NET para AutoCAD 2027 con `POVERKILL` y `PHATCH`. | Desarrolladores |
 | [`overkill/v2/`](overkill/v2/) | **OVERKILL v2**: motor exacto con tolerancia real en 3D, arcos, círculos y polilíneas (Python y C#), y [`overkill/extremo/`](overkill/extremo/), que genera el dibujo de prueba de 3,1 millones de entidades y verifica lo que debe quedar. | Desarrolladores |
 | [`overkill_cs/`](overkill_cs/) | Núcleo de OVERKILL en C#, sin AutoCAD: lee un DXF y mide con 1, 2, 4... hilos. | Desarrolladores |
 | [`overkill/`](overkill/) | Prototipo en Python donde se probó la idea y se midió cuándo conviene repartir. | Curiosos, investigación |
@@ -83,8 +84,7 @@ Lo que aprendimos al medir:
 ## Próximos comandos
 
 1. `PJOIN`: unir líneas y arcos en polilíneas en muchos grupos a la vez.
-2. `PHATCH` y `PBOUNDARY`: contornos de sombreado en paralelo (en revisión).
-3. OVERKILL v2 dentro del plugin, con arcos y polilíneas (el motor ya está en `overkill/v2/`).
+2. `PHATCH` con arcos y círculos como contorno e islas anidadas; `PBOUNDARY`.
 
 ¿Tienes un comando que se te hace eterno? Abre un *issue* con el comando, el tamaño del dibujo y cuánto tarda.
 Ver [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -95,7 +95,7 @@ Ver [CONTRIBUTING.md](CONTRIBUTING.md).
   AutoCAD 2025/2026 usan .NET 8 y no lo cargan todavía.
 - La limpieza por lotes funciona con AutoCAD 2018 o posterior (usa `accoreconsole` y guarda en formato 2018).
 - No funciona en AutoCAD LT: LT no admite plugins ni `accoreconsole`.
-- `POVERKILL` trabaja sólo con LINE por ahora; arcos y polilíneas llegarán cuando el plugin use OVERKILL v2.
+- `PHATCH` sólo usa tramos rectos (LINE y polilíneas sin arcos) como contorno por ahora.
 
 ## Licencia y marcas
 
@@ -115,8 +115,8 @@ the changes in one transaction. Every tool is checked to give an identical resul
 fingerprint) and compared against the native AutoCAD command.
 
 Measured in AutoCAD 2027 on a 16-core Ryzen 9 5950X: batch AUDIT + PURGE of 32 DWG files in 18.5 s instead of
-103.7 s (5.6×); `POVERKILL` on 1.2 million lines in 6.3 s instead of 9.8 s; `PHATCH` boundary detection 30–40×
-faster than HATCH with identical boundaries (in review); OVERKILL v2 engine exact on a 3.1-million-entity
+103.7 s (5.6×); `POVERKILL` on 1.2 million lines in 7.4 s instead of 9.8 s, with the exact expected result; `PHATCH` 30–40×
+faster than HATCH with identical boundaries; OVERKILL v2 engine exact on a 3.1-million-entity
 stress drawing in 1.2 s, where AutoCAD takes 37.8 s and leaves 118,457 extra entities. Ready to use: [`lotes/`](lotes/) (batch cleanup,
 PowerShell only) and [`paquete/`](paquete/) (installer for the plugin, AutoCAD 2027). Docs are in Spanish;
 issues in English are welcome. MIT license. Not affiliated with Autodesk.
