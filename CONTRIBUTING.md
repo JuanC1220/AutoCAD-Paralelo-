@@ -29,5 +29,5 @@ proyecto: usa la plantilla "Error" y di qué esperabas y qué obtuviste. Prueba 
 
 La documentación está en español; se aceptan *issues* y *pull requests* en inglés.
 
-Al contribuir aceptas que tu aporte se publique bajo la licencia del proyecto ([PolyForm Noncommercial 1.0.0](LICENSE))
-y que el autor pueda ofrecerlo también bajo otras condiciones, por ejemplo un permiso de uso comercial.
+Al contribuir aceptas que tu aporte se publique bajo la licencia del proyecto ([PolyForm Shield 1.0.0](LICENSE))
+y que el autor pueda ofrecerlo también bajo otras condiciones.
