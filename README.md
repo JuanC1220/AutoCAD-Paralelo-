@@ -26,3 +26,17 @@ Tolerancia); la Tolerancia se usa luego para la distancia entre paralelas y los 
 Sobre `s5000.dxf` (seed 1): AutoCAD 2027 deja 6233 / 5924 / 5922 líneas (defecto / extremo con
 extremo / ignorar capa); el modo AutoCAD deja 6218 / 5905 / 5907 (0,3 % de diferencia).
 `python bench.py acad s5000.dxf`
+
+## Versión C# (overkill_cs/)
+
+Misma regla que el modo AutoCAD de Python, con hilos que comparten memoria (`Parallel.For`).
+Da exactamente las mismas líneas que `acad_seq` (misma huella SHA-256 en 9 casos probados).
+
+```bash
+cd overkill_cs
+dotnet run -c Release -- ../overkill/s400k.dxf --threads 1,2,4,8,16
+# o un .exe para Windows sin instalar .NET:
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+```
+
+Nube, 4 núcleos, 600.397 líneas (sólo cálculo): 1 hilo 0,256 s, 4 hilos 0,073 s (Python: 3,3 s y 1,5 s).
