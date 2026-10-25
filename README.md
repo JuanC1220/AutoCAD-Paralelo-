@@ -5,6 +5,8 @@ Primer caso: OVERKILL sobre LINE en archivos DXF.
 
 Receta: leer -> copiar -> calcular en paralelo -> reensamblar -> escribir.
 
+Para instalar un plugin en AutoCAD sin NETLOAD (paquete con instalador y cómo compartirlo): ver `paquete/`.
+
 ```bash
 pip install ezdxf numpy
 cd overkill
@@ -44,8 +46,8 @@ Nube, 4 núcleos, 600.397 líneas (sólo cálculo): 1 hilo 0,256 s, 4 hilos 0,07
 
 ## Plugin de AutoCAD 2027 (acad_paralelo/)
 
-Comandos paralelos dentro de AutoCAD (`NETLOAD AcadParalelo.dll`): `POVERKILL`, `POVERKILLBENCH` y `PHATCHMEDIR`
-(mide dónde se va el tiempo de HATCH). Mismo núcleo que `overkill_cs/` (`OverkillCore.cs`). Ver `acad_paralelo/README.md`.
+Comandos paralelos dentro de AutoCAD (`NETLOAD AcadParalelo.dll`): `POVERKILL` (núcleo `overkill/v2`), `POVERKILLBENCH`,
+`PHATCH` (sombrea muchas áreas a la vez), `PLEERMEDIR` y `PHATCHMEDIR`. Ver `acad_paralelo/README.md`.
 
 ## Contornos de HATCH (hatch_cs/)
 
@@ -54,3 +56,8 @@ rejilla espacial → cruces por celda en paralelo → grafo plano → caras → 
 `HatchCs` lo prueba con DXF de `acad_paralelo/pruebas/gen_hatch_dxf.py` (rejillas, islas, diagonales) comparando
 áreas con `<dxf>.esperado.txt` y la huella con 1 y N hilos. Nube, 4 núcleos: 90.000 celdas con islas y diagonales
 (284.829 líneas) en 0,52 s, todas correctas; en 2.500 celdas AutoCAD tarda 32,7 s sólo en detectar contornos.
+
+## Limpieza por lotes (lotes/)
+
+AUDIT + PURGE sobre muchos DWG a la vez, un `accoreconsole` por dibujo, con informe de tamaño antes/después.
+Ver [lotes/README.md](lotes/README.md).
