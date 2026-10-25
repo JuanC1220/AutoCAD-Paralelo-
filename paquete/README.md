@@ -73,9 +73,9 @@ Ninguna de las dos exige cambiar el código.
 
 ## Publicar una versión
 
-Copiar el zip y unas notas (`notas.md`, la primera línea es el título) a `paquete/versiones/vX.Y.Z/`, fusionar en
-`main` y subir la etiqueta: `git tag vX.Y.Z && git push origin vX.Y.Z`. La acción `.github/workflows/version.yml`
-crea la versión en GitHub con ese zip para descargar.
+Copiar el zip y unas notas (`notas.md`, la primera línea es el título) a `paquete/versiones/vX.Y.Z/` y fusionar
+en `main`. La acción `.github/workflows/version.yml` crea la etiqueta y la versión en GitHub con ese zip para
+descargar (también se puede lanzar a mano desde la pestaña Actions).
 
 ## Pendiente
 

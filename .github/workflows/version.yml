@@ -1,10 +1,13 @@
-# Publica una versión (Release) al subir una etiqueta vX.Y.Z.
-# Toma las notas y los .zip de paquete/versiones/<etiqueta>/.
+# Publica una versión (Release) por cada carpeta paquete/versiones/vX.Y.Z/ que aún no la tenga.
+# La carpeta lleva notas.md (la primera línea es el título) y los .zip para descargar.
+# Corre al fusionar en main cambios en esa carpeta, o a mano desde la pestaña Actions.
 name: Publicar versión
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths: ["paquete/versiones/**", ".github/workflows/version.yml"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,11 +17,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Crear la versión
+      - name: Crear las versiones que falten
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
         run: |
-          dir="paquete/versiones/$TAG"
-          titulo=$(head -1 "$dir/notas.md" | sed 's/^#* *//; s/:.*//')
-          gh release create "$TAG" "$dir"/*.zip --title "$titulo" --notes-file "$dir/notas.md" --verify-tag
+          for dir in paquete/versiones/v*/; do
+            tag=$(basename "$dir")
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "$tag ya publicada"
+              continue
+            fi
+            titulo=$(head -1 "$dir/notas.md" | sed 's/^#* *//; s/:.*//')
+            gh release create "$tag" "$dir"*.zip --title "$titulo" --notes-file "$dir/notas.md" --target "$GITHUB_SHA"
+          done
