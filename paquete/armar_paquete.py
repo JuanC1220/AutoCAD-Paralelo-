@@ -66,7 +66,7 @@ Qué hace y qué no
   Revisa el resultado antes de guardar sobre un plano importante.
 
 Requisitos: AutoCAD 2027 para Windows (no AutoCAD LT, que no admite plugins .NET).
-Gratis para uso no comercial (licencia PolyForm Noncommercial 1.0.0), sin garantía. Código y versiones: """ + REPO + """
+Gratis, también para uso en tu trabajo; no se permite venderla (licencia PolyForm Shield 1.0.0), sin garantía. Código y versiones: """ + REPO + """
 """,
     ),
 }

@@ -116,12 +116,18 @@ Lo que aprendimos al medir:
 ¿Hay un comando que se te hace eterno? Abre un [issue](https://github.com/JuanC1220/AutoCAD-Paralelo-/issues/new/choose)
 con el comando, el tamaño del dibujo y cuánto tarda. Ver [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Licencia: gratis para uso no comercial
+## Licencia: gratis, también para tu trabajo; lo que no se puede es venderla
 
-Puedes usar, estudiar, modificar y compartir estas herramientas **gratis para cualquier fin no comercial**: uso
-personal, estudio, investigación, educación, organizaciones sin fines de lucro e instituciones públicas. **Vender
-estas herramientas o usarlas para obtener ganancias no está permitido** sin un permiso escrito del autor; si te
-interesa, abre un *issue*. Texto completo: [LICENSE](LICENSE) ([PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)).
+**Puedes usar estas herramientas gratis en tu trabajo**, aunque ese trabajo sea pagado: como empleado, en tu
+empresa o como independiente, para hacer y entregar tus planos. También puedes estudiarlas, modificarlas y
+compartirlas gratis.
+
+**Lo que no se puede es comercializar la herramienta**: venderla, cobrar por ella o por una versión modificada,
+ni ofrecer un producto o servicio que la reemplace o compita con ella, aunque sea gratis. Si te interesa algo de
+eso, abre un *issue* y lo conversamos.
+
+Texto completo: [LICENSE](LICENSE) ([PolyForm Shield 1.0.0](https://polyformproject.org/licenses/shield/1.0.0/)).
+Se entrega sin garantía.
 
 La versión 0.1.0 de POverkill se publicó con licencia MIT; desde las versiones siguientes rige esta licencia.
 
@@ -150,9 +156,9 @@ Measured in AutoCAD 2027 on a 16-core Ryzen 9 5950X. Download the installer from
 `POVERKILL` for lines only, the rest is in `acad_paralelo/`). Batch cleanup works
 with AutoCAD 2018 or later. Not for AutoCAD LT. Docs are in Spanish; issues in English are welcome.
 
-**License:** free for any noncommercial use (personal, study, research, education, nonprofits, public
-institutions) under [PolyForm Noncommercial 1.0.0](LICENSE). Selling it or using it for profit requires written
-permission from the author. Version 0.1.0 of POverkill was released under MIT.
+**License:** free to use, including in your paid work (as an employee, at your company or as a freelancer).
+What is not allowed is commercializing the tool itself: selling it, charging for it or for a modified version, or
+offering a product that competes with it. [PolyForm Shield 1.0.0](LICENSE). Version 0.1.0 of POverkill was released under MIT.
 
 **Not affiliated with Autodesk.** AutoCAD is a registered trademark of Autodesk, Inc. No Autodesk files are
 included or redistributed.
