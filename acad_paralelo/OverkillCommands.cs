@@ -48,7 +48,7 @@ namespace AcadParalelo
                             (d.Bloqueadas + d.NoPlanas > 0 ? $", omitidas {d.Bloqueadas} en capa bloqueada y {d.NoPlanas} no planas en XY" : "") +
                             $", {d.Grupos} combinaciones de propiedades" +
                             $".\n  Quedan {kept}: borradas {erased}, alargadas {changed}." +
-                            $"\n  Tiempos: leer {tRead:F3} s (abrir {d.TAbrir:F3}, propiedades {d.TPropiedades:F3}), calcular {tComp - tRead:F3} s, aplicar {tTotal - tComp:F3} s, total {tTotal:F3} s.\n");
+                            $"\n  Tiempos: leer {tRead:F3} s, calcular {tComp - tRead:F3} s, aplicar {tTotal - tComp:F3} s, total {tTotal:F3} s.\n");
         }
 
         // POVERKILLBENCH: no modifica el dibujo; mide el cálculo con 1..N hilos y verifica que el resultado sea idéntico
@@ -136,9 +136,12 @@ namespace AcadParalelo
             var L = d.L;
             Point3d P(int i, int w) => w == 0 ? new Point3d(L.X0[i], L.Y0[i], d.Z[i]) : new Point3d(L.X1[i], L.Y1[i], d.Z[i]);
             int kept = 0, erased = 0, changed = 0;
-            using (var tr = db.TransactionManager.StartTransaction())
+            // en bloques: una transacción enorme se vuelve más lenta con cada objeto abierto (ver Lector)
+            for (int s0 = 0; s0 < L.N; s0 += Lector.Bloque)
             {
-                for (int i = 0; i < L.N; i++)
+                int s1 = Math.Min(L.N, s0 + Lector.Bloque);
+                using var tr = db.TransactionManager.StartTransaction();
+                for (int i = s0; i < s1; i++)
                 {
                     if (res[i, 0] == 1)
                     {

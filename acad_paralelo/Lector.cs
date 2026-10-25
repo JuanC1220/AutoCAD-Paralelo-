@@ -1,7 +1,9 @@
 // Lector común de entidades: el paso "leer -> copiar" de la receta, compartido por todos los comandos.
 // La base de datos de AutoCAD sólo se puede leer desde el hilo principal, así que esto es secuencial
 // y conviene que sea lo más barato posible:
-//   - abrir por bloques en transacciones abrir/cerrar (con todo abierto a la vez el costo crecía más que lineal),
+//   - abrir y cerrar cada objeto de inmediato (ObjectId.Open). Medido con PLEERMEDIR en AutoCAD 2027, 1,2M líneas:
+//     una a una 0,38 s; transacción normal en bloques de 20.000 0,46 s; abrir/cerrar en bloques de 5.000 0,68 s,
+//     de 100.000 8,0 s y todo en una transacción 92 s (el costo crece con lo que queda abierto),
 //   - leer propiedades como ObjectId o valor, nunca como texto (Layer, Linetype, Color.ToString() resuelven
 //     nombres en cada entidad),
 //   - leer el estilo de trazado sólo si el dibujo usa estilos con nombre (STB).
@@ -18,7 +20,7 @@ namespace AcadParalelo
 {
     public static class Lector
     {
-        public const int Bloque = 20000;
+        public const int Bloque = 5000;   // para escribir: transacciones de este tamaño
 
         public sealed class Lineas
         {
@@ -28,7 +30,7 @@ namespace AcadParalelo
             public long[] Props;       // un entero por combinación de propiedades
             public int Grupos;         // combinaciones distintas
             public int Bloqueadas, NoPlanas;
-            public double TAbrir, TPropiedades;
+            public double TLeer;
         }
 
         readonly record struct Clave(ObjectId Capa, int ColorMetodo, int Color, ObjectId TipoLinea, double EscalaTipo,
@@ -46,19 +48,14 @@ namespace AcadParalelo
             var bloqueada = new Dictionary<ObjectId, bool>();
             bool estilosConNombre = !db.PlotStyleMode;
             var r = new Lineas();
-            var lines = new Line[Math.Min(Bloque, Math.Max(n, 1))];
-            var sw = new Stopwatch();
-            for (int s0 = 0; s0 < n; s0 += Bloque)
+            var sw = Stopwatch.StartNew();
+            using (var tr = db.TransactionManager.StartOpenCloseTransaction())   // sólo para las capas
             {
-                int cnt = Math.Min(Bloque, n - s0);
-                using var tr = db.TransactionManager.StartOpenCloseTransaction();
-                sw.Restart();
-                for (int j = 0; j < cnt; j++) lines[j] = (Line)tr.GetObject(sel[s0 + j], OpenMode.ForRead);
-                r.TAbrir += sw.Elapsed.TotalSeconds;
-                sw.Restart();
-                for (int j = 0; j < cnt; j++)
+                foreach (var id in sel)
                 {
-                    var ln = lines[j];
+#pragma warning disable 618
+                    using var ln = (Line)id.Open(OpenMode.ForRead);
+#pragma warning restore 618
                     var capa = ln.LayerId;
                     if (!bloqueada.TryGetValue(capa, out var esBloq))
                         bloqueada[capa] = esBloq = ((LayerTableRecord)tr.GetObject(capa, OpenMode.ForRead)).IsLocked;
@@ -73,12 +70,11 @@ namespace AcadParalelo
                                       estilosConNombre ? ln.PlotStyleNameId : default, ln.MaterialId,
                                       ln.Thickness != 0 ? ln.Normal : Vector3d.ZAxis, a.Z);
                     if (!claves.TryGetValue(k, out var v)) { v = claves.Count; claves[k] = v; }
-                    ids.Add(sel[s0 + j]); x0.Add(a.X); y0.Add(a.Y); x1.Add(b.X); y1.Add(b.Y); z.Add(a.Z); props.Add(v);
+                    ids.Add(id); x0.Add(a.X); y0.Add(a.Y); x1.Add(b.X); y1.Add(b.Y); z.Add(a.Z); props.Add(v);
                 }
                 tr.Commit();
-                r.TPropiedades += sw.Elapsed.TotalSeconds;
             }
-            Array.Clear(lines);
+            r.TLeer = sw.Elapsed.TotalSeconds;
             r.Ids = ids.ToArray(); r.Z = z.ToArray(); r.Props = props.ToArray(); r.Grupos = claves.Count;
             r.L = new Overkill.Lines { N = ids.Count, X0 = x0.ToArray(), Y0 = y0.ToArray(), X1 = x1.ToArray(), Y1 = y1.ToArray() };
             return r;

@@ -14,7 +14,7 @@ Comandos de AutoCAD que hacen su cálculo en varios hilos. Todos siguen la misma
 | `PLEERMEDIR` | No modifica el dibujo: compara formas de leer las LINE (seleccionar, recorrer el espacio, abrir por bloques de distintos tamaños, transacción normal, `ObjectId.Open`, propiedades como texto) para elegir la más rápida. |
 | `PHATCHMEDIR` | Mide dónde se va el tiempo de HATCH: detectar contorno, crear sombreado, generar patrón. Un sombreado ANSI31 por cada POINT seleccionado. |
 
-Todos leen con `Lector.cs`: abre por bloques de 20.000 en transacciones abrir/cerrar y compara capa, color, tipo de línea,
+Todos leen con `Lector.cs`: abre y cierra cada objeto al momento (`ObjectId.Open`; con todo abierto en una transacción leer 1,2M líneas costaba 92 s, así 0,4 s) y compara capa, color, tipo de línea,
 escala de tipo de línea, grosor, altura de objeto, transparencia, estilo de trazado (si es STB), material, normal y elevación
 (por ObjectId o valor, nunca por nombre). Omite capas bloqueadas y líneas no planas en XY.
 
