@@ -14,6 +14,7 @@ $tmp = Join-Path $env:TEMP ("AcadParalelo_descarga_" + [Guid]::NewGuid().ToStrin
 Invoke-WebRequest $url -OutFile $tmp -UseBasicParsing
 $h = (Get-FileHash $tmp -Algorithm SHA256).Hash
 if ($h -ne $Sha256.ToUpper()) { Remove-Item $tmp; throw "Huella distinta: $h (esperada $Sha256). No se instaló nada." }
+New-Item -ItemType Directory -Force (Split-Path $Destino) | Out-Null
 if (Test-Path $Destino) {
     $ant = Join-Path (Split-Path $Destino) 'anteriores'
     New-Item -ItemType Directory -Force $ant | Out-Null
