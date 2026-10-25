@@ -53,8 +53,10 @@ redistribuye nada de Autodesk.
 
 **Lo que hay que cuidar:**
 
-1. **Licencia del código: MIT** (archivo `LICENSE` en la raíz). Cualquiera puede usar, modificar y repartir
-   el código y la DLL, gratis o no, siempre que conserve el aviso de copyright; se entrega sin garantía.
+1. **Licencia: PolyForm Noncommercial 1.0.0** (archivo `LICENSE` en la raíz). Cualquiera puede usar, modificar
+   y repartir el código y la DLL gratis para fines no comerciales, conservando el aviso de copyright; venderlo o
+   usarlo con fines de lucro requiere permiso escrito del autor. Se entrega sin garantía. La versión 0.1.0 salió
+   con licencia MIT.
 2. **Nombre.** "AutoCAD" es marca de Autodesk: el producto no debe llamarse "AutoCAD algo"; "para AutoCAD" sí
    se puede. Por eso el paquete se llama POverkill.
 3. **Firma digital (opcional, recomendable para otros usuarios).** Con un certificado de firma de código
