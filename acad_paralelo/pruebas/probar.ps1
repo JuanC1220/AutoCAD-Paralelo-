@@ -1,14 +1,20 @@
-# Corre comandos nativos de AutoCAD y los del plugin sobre COPIAS de un DXF con accoreconsole y anota resultados.
+﻿# Corre comandos nativos de AutoCAD y los del plugin sobre COPIAS de un DXF con accoreconsole y anota resultados.
 # No toca tus dibujos; los ajustes que cambia (SECURELOAD, OSMODE, HPASSOC) se devuelven a su valor al terminar.
-#   powershell -ExecutionPolicy Bypass -File probar.ps1 -Modo overkill -Dxf s400k.dxf [-Hilos 1,16,32]
+#   powershell -ExecutionPolicy Bypass -File probar.ps1 -Modo overkill -Dxf s400k.dxf [-Hilos 1,16,32] [-TimeoutMin 30]
 #   powershell -ExecutionPolicy Bypass -File probar.ps1 -Modo hatch -Dxf h50.dxf     (h50.puntos.txt al lado)
 param(
     [Parameter(Mandatory)][ValidateSet('overkill', 'hatch')][string]$Modo,
     [Parameter(Mandatory)][string]$Dxf,
-    [int[]]$Hilos = @(1, [Environment]::ProcessorCount),
-    [string]$Dll = (Join-Path $PSScriptRoot 'AcadParalelo.dll')
+    [string[]]$Hilos = @('1', [Environment]::ProcessorCount),
+    [string]$Dll = '',
+    [int]$TimeoutMin = 30
 )
 $ErrorActionPreference = 'Stop'
+# PowerShell 5.1 deja $PSScriptRoot vacío en los valores por defecto de param()
+if (-not $PSScriptRoot) { $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
+if (-not $Dll) { $Dll = Join-Path $PSScriptRoot 'AcadParalelo.dll' }
+# con -File, "1,32" llega como un solo texto
+$Hilos = @($Hilos -join ',' -split '[,\s]+' | Where-Object { $_ } | ForEach-Object { [int]$_ })
 $acc = Get-ChildItem 'C:\Program Files\Autodesk\AutoCAD 2027\accoreconsole.exe'
 $dxf = (Resolve-Path $Dxf).Path
 $base = [IO.Path]::GetFileNameWithoutExtension($dxf)
@@ -21,6 +27,7 @@ $cargar = @"
 (setvar "SECURELOAD" 0)
 (command "_.NETLOAD" "$dllL")
 (setvar "SECURELOAD" sl)
+
 "@
 
 function Correr([string]$nombre, [string]$cuerpo) {
@@ -33,7 +40,11 @@ function Correr([string]$nombre, [string]$cuerpo) {
     $texto = ($cuerpo.Replace('@RES@', $res) + "`n_.QUIT`n_Y`n") -replace "`r?`n", "`r`n"
     [IO.File]::WriteAllText($scr, $texto, [Text.Encoding]::GetEncoding(1252))
     Write-Host "Corriendo $nombre ..."
-    & $acc.FullName /i $copia /s $scr | Out-File (Join-Path $out "$nombre.log")
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    $p = Start-Process $acc.FullName -ArgumentList "/i `"$copia`" /s `"$scr`"" -NoNewWindow -PassThru `
+        -RedirectStandardOutput (Join-Path $out "$nombre.log")
+    if (-not $p.WaitForExit($TimeoutMin * 60000)) { $p.Kill(); Write-Host "  cortado tras $TimeoutMin min" }
+    Write-Host ("  reloj: {0:F1} s" -f $sw.Elapsed.TotalSeconds)
     if (Test-Path $res) { Get-Content $res } else { Write-Host "  (sin resultado: revisa $nombre.log)" }
     $inf = Join-Path $out "$nombre.acadparalelo.txt"
     if (Test-Path $inf) { Get-Content $inf }
@@ -48,12 +59,13 @@ if ($Modo -eq 'overkill') {
 _.-OVERKILL
 _ALL
 
-_T
+_O
 0.000001
 _I
 _N
 _E
 _Y
+
 
 "@ + (& $anota 'overkill_nativo' 'LINE'))
     foreach ($t in $Hilos) {
@@ -65,6 +77,7 @@ _ALL
 H
 $t
 
+
 "@ + (& $anota "poverkill_$($t)hilos" 'LINE'))
     }
     Correr 'poverkillbench' ($cargar + @"
@@ -73,12 +86,13 @@ POVERKILLBENCH
 _ALL
 
 
+
 "@ + (& $anota 'poverkillbench' 'LINE'))
 }
 else {
     $pts = Get-Content ([IO.Path]::ChangeExtension($dxf, '.puntos.txt'))
     $vars = "(setq osm (getvar `"OSMODE`") hpa (getvar `"HPASSOC`"))(setvar `"OSMODE`" 0)(setvar `"HPASSOC`" 0)`n_.ZOOM`n_E`n"
-    $fin = "(setvar `"OSMODE`" osm)(setvar `"HPASSOC`" hpa)`n"
+    $fin = "(setvar `"OSMODE`" osm)(setvar `"HPASSOC`" hpa)"
     # -HATCH nativo: un sombreado por punto interior, patrón ANSI31 escala 1
     $sb = [Text.StringBuilder]::new()
     [void]$sb.Append($vars + "(setq t0 (getvar `"MILLISECS`"))`n_.-HATCH`n_P`nANSI31`n1`n0`n$($pts[0])`n`n")
@@ -88,6 +102,7 @@ else {
 (setq t0 (getvar "MILLISECS"))
 PHATCHMEDIR
 _ALL
+
 
 "@ + (& $anota 'phatchmedir' 'HATCH') + "`n" + $fin)
 }
