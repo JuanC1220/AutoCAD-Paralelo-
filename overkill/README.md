@@ -1,7 +1,7 @@
 # Prototipo OVERKILL paralelo (Python)
 
 Aquí se probó la receta **leer → copiar → calcular en paralelo → reensamblar → escribir** con OVERKILL sobre
-LINE en archivos DXF, y se midió desde qué tamaño conviene repartir. El núcleo rápido está en
+LINE en archivos DXF, y se midió desde qué tamaño conviene repartir. El motor exacto nuevo está en [`v2/`](v2/) (con el dibujo de prueba en [`extremo/`](extremo/)); el núcleo rápido del modo AutoCAD, en
 [`../overkill_cs/`](../overkill_cs/); esto queda como referencia y banco de pruebas.
 
 ```bash

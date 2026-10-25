@@ -18,7 +18,7 @@ En AutoCAD 2027 real, PC con Ryzen 9 5950X (16 núcleos / 32 hilos):
 | Limpieza por lotes (AUDIT + PURGE) | 32 DWG | 103,7 s | **18,5 s** (5,6×) | ✅ lista: [`lotes/`](lotes/) |
 | `POVERKILL` (plugin) | 1,2 millones de líneas | 9,8 s | **6,3 s** | ✅ instalable: [`paquete/`](paquete/) |
 | `PHATCH` (plugin) | 2.500 áreas con islas | 98,8 s | **2,5 s** (40×) | 🧪 en revisión |
-| OVERKILL v2 (motor) | 3,1 millones de entidades, 23 tipos de caso difícil | 37,8 s y deja 118.457 entidades de más | **1,2 s**, 100 % exacto | 🧪 en revisión |
+| OVERKILL v2 (motor) | 3,1 millones de entidades, 23 tipos de caso difícil | 37,8 s y deja 118.457 entidades de más | **1,2 s**, 100 % exacto | ✅ motor listo: [`overkill/v2/`](overkill/v2/) |
 
 - `POVERKILL` mide el comando completo dentro de AutoCAD (leer, calcular, aplicar). El cálculo en sí baja de
   0,19 s con 1 hilo a 0,035 s con 16; lo que queda es leer y escribir en el dibujo, que AutoCAD sólo permite
@@ -35,6 +35,7 @@ En AutoCAD 2027 real, PC con Ryzen 9 5950X (16 núcleos / 32 hilos):
 | [`lotes/`](lotes/) | **Limpieza por lotes**: AUDIT + PURGE sobre una carpeta entera de DWG, varios a la vez, con informe HTML/CSV de cuánto bajó cada archivo. Sólo AutoCAD y PowerShell. | Usuarios de AutoCAD |
 | [`paquete/`](paquete/) | **Instalador** del plugin: un `.bundle` que AutoCAD carga solo al arrancar (sin `NETLOAD`) y un `instalar.bat`. | Usuarios de AutoCAD |
 | `acad_paralelo/` | Plugin .NET para AutoCAD 2027 con `POVERKILL` y `PHATCH` (en revisión). | Desarrolladores |
+| [`overkill/v2/`](overkill/v2/) | **OVERKILL v2**: motor exacto con tolerancia real en 3D, arcos, círculos y polilíneas (Python y C#), y [`overkill/extremo/`](overkill/extremo/), que genera el dibujo de prueba de 3,1 millones de entidades y verifica lo que debe quedar. | Desarrolladores |
 | [`overkill_cs/`](overkill_cs/) | Núcleo de OVERKILL en C#, sin AutoCAD: lee un DXF y mide con 1, 2, 4... hilos. | Desarrolladores |
 | [`overkill/`](overkill/) | Prototipo en Python donde se probó la idea y se midió cuándo conviene repartir. | Curiosos, investigación |
 
@@ -83,7 +84,7 @@ Lo que aprendimos al medir:
 
 1. `PJOIN`: unir líneas y arcos en polilíneas en muchos grupos a la vez.
 2. `PHATCH` y `PBOUNDARY`: contornos de sombreado en paralelo (en revisión).
-3. OVERKILL v2 dentro del plugin, con arcos y polilíneas.
+3. OVERKILL v2 dentro del plugin, con arcos y polilíneas (el motor ya está en `overkill/v2/`).
 
 ¿Tienes un comando que se te hace eterno? Abre un *issue* con el comando, el tamaño del dibujo y cuánto tarda.
 Ver [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -94,7 +95,7 @@ Ver [CONTRIBUTING.md](CONTRIBUTING.md).
   AutoCAD 2025/2026 usan .NET 8 y no lo cargan todavía.
 - La limpieza por lotes funciona con AutoCAD 2018 o posterior (usa `accoreconsole` y guarda en formato 2018).
 - No funciona en AutoCAD LT: LT no admite plugins ni `accoreconsole`.
-- `POVERKILL` trabaja sólo con LINE por ahora; arcos y polilíneas llegan con OVERKILL v2.
+- `POVERKILL` trabaja sólo con LINE por ahora; arcos y polilíneas llegarán cuando el plugin use OVERKILL v2.
 
 ## Licencia y marcas
 
@@ -115,6 +116,7 @@ fingerprint) and compared against the native AutoCAD command.
 
 Measured in AutoCAD 2027 on a 16-core Ryzen 9 5950X: batch AUDIT + PURGE of 32 DWG files in 18.5 s instead of
 103.7 s (5.6×); `POVERKILL` on 1.2 million lines in 6.3 s instead of 9.8 s; `PHATCH` boundary detection 30–40×
-faster than HATCH with identical boundaries (in review). Ready to use: [`lotes/`](lotes/) (batch cleanup,
+faster than HATCH with identical boundaries (in review); OVERKILL v2 engine exact on a 3.1-million-entity
+stress drawing in 1.2 s, where AutoCAD takes 37.8 s and leaves 118,457 extra entities. Ready to use: [`lotes/`](lotes/) (batch cleanup,
 PowerShell only) and [`paquete/`](paquete/) (installer for the plugin, AutoCAD 2027). Docs are in Spanish;
 issues in English are welcome. MIT license. Not affiliated with Autodesk.
