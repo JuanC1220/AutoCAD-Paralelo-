@@ -3,6 +3,7 @@
   python bench.py check  archivo.dxf            # conteos esperados + igualdad seq/par
   python bench.py time   archivo.dxf [reps]     # tiempos por fase con 1, 2 y 4 trabajadores
   python bench.py write  archivo.dxf salida.dxf [workers]
+  python bench.py acad   archivo.dxf            # modo AutoCAD: conteos + igualdad seq/par
 """
 import json
 import statistics
@@ -70,6 +71,15 @@ if __name__ == "__main__":
         sys.exit(0 if check(path) else 1)
     elif cmd == "time":
         timing(path, int(sys.argv[3]) if len(sys.argv) > 3 else 3)
+    elif cmd == "acad":
+        L = ok.read_lines(path)
+        for name, kw in [("default", {}), ("end_to_end", {"end_to_end": True}),
+                         ("ignore_layer", {"ignore": ("layer",)})]:
+            fp = ok.fingerprint(ok.result_lines(L, ok.acad_seq(L, **kw)))
+            n = len(ok.acad_seq(L, **kw))
+            same = all(ok.fingerprint(ok.result_lines(L, ok.acad_par(L, workers=w, **kw))) == fp
+                       for w in (1, 2, 4))
+            print(f"{name:13s} lineas={n:8d}  paralelo 1/2/4={'IGUAL' if same else 'DISTINTO'}")
     elif cmd == "write":
         L = ok.read_lines(path)
         w = int(sys.argv[4]) if len(sys.argv) > 4 else 4

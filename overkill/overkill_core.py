@@ -224,6 +224,123 @@ def overkill_par(L, workers=4, tol=1e-6, end_to_end=False, ignore=(), timings=No
     return res
 
 
+# ---------------------------------------------------------------- modo "acad" (regla medida en AutoCAD 2027)
+# Medido en AutoCAD 2027 con DXF sintéticos: OVERKILL sólo considera iguales o
+# colineales dos líneas casi exactamente paralelas (corte angular interno ~1e-10 rad,
+# independiente de la Tolerancia). Después usa la Tolerancia para la distancia entre
+# rectas paralelas y para los extremos. Una copia movida 0,3e-6 en cada extremo queda
+# girada ~1e-9 rad y AutoCAD NO la borra; una copia sólo trasladada sí.
+ATOL = 1e-10
+
+
+def angle_buckets(L):
+    """Cubeta angular de cada línea, en [0, pi) / ATOL (-1 = longitud cero).
+    Se calcula una sola vez y la usan igual la versión secuencial y la paralela."""
+    import numpy as np
+    A = L.np
+    dx, dy = A["x1"] - A["x0"], A["y1"] - A["y0"]
+    th = np.arctan2(dy, dx)
+    th = np.where(th < 0, th + np.pi, th)
+    th = np.where(th >= np.pi, th - np.pi, th)
+    b = np.floor(th / ATOL).astype(np.int64)
+    b[(dx == 0) & (dy == 0)] = -1
+    return b
+
+
+def acad_group(rows, b, tol, end_to_end):
+    """rows: [(i, x0, y0, x1, y1)] con mismas propiedades y misma cubeta angular b.
+    Agrupa por distancia perpendicular (enlace simple, hueco <= tol) y barre cada
+    recta como intervalos 1D con tolerancia. Devuelve [(surv, i_min, e_min, i_max, e_max)]."""
+    if b < 0:                                   # longitud cero: duplicados por posición
+        seen = {}
+        for i, x0, y0, _, _ in rows:
+            k = (round(x0 / tol), round(y0 / tol))
+            seen[k] = min(seen.get(k, i), i)
+        return [(i, i, 0, i, 1) for i in seen.values()]
+    th = (b + 0.5) * ATOL
+    ux, uy = math.cos(th), math.sin(th)
+    recs = []
+    for i, x0, y0, x1, y1 in rows:
+        rho = ux * (y0 + y1) / 2 - uy * (x0 + x1) / 2
+        t0, t1 = ux * x0 + uy * y0, ux * x1 + uy * y1
+        recs.append((rho, i, (t0, t1, i, (i, 0), (i, 1)) if t0 <= t1 else (t1, t0, i, (i, 1), (i, 0))))
+    recs.sort()
+    out, cluster, last = [], [], None
+    for rho, _, it in recs:
+        if last is not None and rho - last > tol:
+            out += _sweep_tol(cluster, tol, end_to_end)
+            cluster = []
+        cluster.append(it)
+        last = rho
+    out += _sweep_tol(cluster, tol, end_to_end)
+    return out
+
+
+def _sweep_tol(items, tol, end_to_end):
+    items.sort()
+    out = []
+    s_min, s_max, surv, e_min, e_max = items[0]
+    for tmin, tmax, idx, emin, emax in items[1:]:
+        if tmin < s_max - tol or (end_to_end and tmin <= s_max + tol) or \
+                (abs(tmin - s_min) <= tol and abs(tmax - s_max) <= tol):     # duplicado
+            if tmax > s_max + tol or (abs(tmax - s_max) <= tol and emax[0] < e_max[0] and tmax >= s_max):
+                e_max = emax
+            s_max = max(s_max, tmax)
+            surv = min(surv, idx)
+        else:
+            out.append((surv, e_min[0], e_min[1], e_max[0], e_max[1]))
+            s_min, s_max, surv, e_min, e_max = tmin, tmax, idx, emin, emax
+    out.append((surv, e_min[0], e_min[1], e_max[0], e_max[1]))
+    return out
+
+
+def acad_seq(L, tol=1e-6, end_to_end=False, ignore=()):
+    props = encode_props(L, ignore).tolist()
+    b = angle_buckets(L).tolist()
+    groups = defaultdict(list)
+    for i in range(len(L)):
+        groups[(props[i], b[i])].append((i, L.x0[i], L.y0[i], L.x1[i], L.y1[i]))
+    res = [r for (p, bb), rows in groups.items() for r in acad_group(rows, bb, tol, end_to_end)]
+    res.sort()
+    return res
+
+
+def _acad_work(j):
+    L, props, b, tol, e2e = _G["L"], _G["props"], _G["b"], _G["tol"], _G["e2e"]
+    groups = defaultdict(list)
+    for i in _G["parts"][j]:
+        groups[(props[i], b[i])].append((i, L.x0[i], L.y0[i], L.x1[i], L.y1[i]))
+    flat = []
+    for (p, bb), rows in groups.items():
+        for r in acad_group(rows, bb, tol, e2e):
+            flat += r
+    return flat
+
+
+def acad_par(L, workers=4, tol=1e-6, end_to_end=False, ignore=(), timings=None):
+    import time
+    import numpy as np
+    t = time.perf_counter()
+    props = encode_props(L, ignore)
+    b = angle_buckets(L)
+    nparts = workers * 4
+    pid = ((b % _M) * 1000003 + props % _M) % _M % nparts
+    order = np.argsort(pid, kind="stable")
+    cuts = np.searchsorted(pid[order], np.arange(1, nparts))
+    parts = [p.tolist() for p in np.split(order, cuts)]
+    _G.update(L=L, props=props.tolist(), b=b.tolist(), tol=tol, e2e=end_to_end, parts=parts)
+    t1 = time.perf_counter()
+    with mp.get_context("fork").Pool(workers) as pool:
+        outs = pool.map(_acad_work, sorted(range(nparts), key=lambda j: -len(parts[j])), chunksize=1)
+    t2 = time.perf_counter()
+    flat = np.concatenate([np.asarray(f, dtype=np.int64) for f in outs]).reshape(-1, 5)
+    res = flat[np.argsort(flat[:, 0])].tolist()
+    _G.clear()
+    if timings is not None:
+        timings.update(partition=t1 - t, compute=t2 - t1, reassemble=time.perf_counter() - t2)
+    return res
+
+
 # ---------------------------------------------------------------- escribir / comparar
 def endpoint(L, i, which):
     return (L.x0[i], L.y0[i]) if which == 0 else (L.x1[i], L.y1[i])

@@ -17,3 +17,12 @@ python bench.py write s100k.dxf salida.dxf 4       # aplica OVERKILL paralelo y 
 - `gen_dxf.py`: segmentos base + defectos plantados (duplicados, invertidos, solapes, contenidos, extremo con extremo, otra capa, casi paralelos).
 - `overkill_core.py`: lector DXF rápido, versión secuencial de referencia y versión paralela (partición por recta portadora).
 - `bench.py`: verificación de igualdad y medición.
+
+## Modo AutoCAD
+
+`overkill_core.acad_seq` / `acad_par` imitan la regla medida en AutoCAD 2027 real: dos líneas sólo se
+comparan si son casi exactamente paralelas (corte angular interno ~1e-10 rad, independiente de la
+Tolerancia); la Tolerancia se usa luego para la distancia entre paralelas y los extremos.
+Sobre `s5000.dxf` (seed 1): AutoCAD 2027 deja 6233 / 5924 / 5922 líneas (defecto / extremo con
+extremo / ignorar capa); el modo AutoCAD deja 6218 / 5905 / 5907 (0,3 % de diferencia).
+`python bench.py acad s5000.dxf`
