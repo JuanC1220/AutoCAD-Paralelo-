@@ -155,6 +155,9 @@ namespace AcadParalelo
                 if (rl.Borrar[i]) { lBorr++; tareas.Add(tr => tr.GetObject(d.IdL[k], OpenMode.ForWrite).Erase()); }
                 else if (rl.Nueva.TryGetValue(i, out var g))
                 {
+                    // el superviviente suele quedar igual (copias exactas, contenidas): no reescribirlo ahorra tiempo
+                    if (g.X0 == d.L.X0[i] && g.Y0 == d.L.Y0[i] && g.Z0 == d.L.Z0[i] && g.X1 == d.L.X1[i] && g.Y1 == d.L.Y1[i] && g.Z1 == d.L.Z1[i])
+                        continue;
                     lMod++;
                     tareas.Add(tr =>
                     {
@@ -184,6 +187,7 @@ namespace AcadParalelo
                 }
                 else if (ra.Nuevo.TryGetValue(i, out var g))
                 {
+                    if (g.Ini == d.A.Ini[i] && g.Fin == d.A.Fin[i]) continue;
                     aMod++;
                     tareas.Add(tr =>
                     {

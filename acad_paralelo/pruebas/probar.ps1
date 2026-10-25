@@ -63,7 +63,7 @@ if ($Modo -eq 'extremo') {
     $csv = ((Join-Path $out 'poverkill_extremo.csv') -replace '\\', '/')
     $lsp = '(setq f (open "' + $csv + '" "w") L (tblnext "LAYER" T))' +
            '(while L (setq s (ssget "_X" (list (cons 8 (cdr (assoc 2 L)))))) (write-line (strcat (cdr (assoc 2 L)) ";" (itoa (if s (sslength s) 0))) f) (setq L (tblnext "LAYER")))(close f)'
-    Correr 'poverkill_extremo' ($cargar + "(setq t0 (getvar `"MILLISECS`"))`nPOVERKILL`n_ALL`n`n`n`n" + (& $anota 'poverkill_extremo' 'LINE') + "`n" + $lsp + "`n")
+    Correr 'poverkill_extremo' ($cargar + "(setq t0 (getvar `"MILLISECS`"))`nPOVERKILL`n_ALL`n`n`n" + (& $anota 'poverkill_extremo' 'LINE') + "`n" + $lsp + "`n")
 }
 elseif ($Modo -eq 'leer') {
     # compara formas de leer las LINE (no modifica el dibujo)
