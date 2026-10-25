@@ -107,7 +107,7 @@ namespace AcadParalelo
         {
             while (true)
             {
-                var pko = new PromptKeywordOptions($"\n{Settings()}\nOpción [Hilos/Tolerancia/Capa/Extremo] <Hecho>: ", "Hilos Tolerancia Capa Extremo Hecho")
+                var pko = new PromptKeywordOptions($"\n{Settings()}\nOpción [Hilos/Tolerancia/Capa/Extremo/Hecho] <Hecho>: ", "Hilos Tolerancia Capa Extremo Hecho")
                 { AllowNone = true };
                 var r = ed.GetKeywords(pko);
                 if (r.Status == PromptStatus.None || (r.Status == PromptStatus.OK && r.StringResult == "Hecho")) return true;
