@@ -317,19 +317,22 @@ def acad_seq(L, tol=1e-6, end_to_end=False, ignore=()):
     return res
 
 
-def _acad_work(j):
-    L, props, b, tol, e2e = _G["L"], _G["props"], _G["b"], _G["tol"], _G["e2e"]
+def _acad_rows(task):
+    """Trabajador: recibe sólo las filas de su partición (sirve igual con fork o spawn)."""
+    tol, e2e, rows = task
     groups = defaultdict(list)
-    for i in _G["parts"][j]:
-        groups[(props[i], b[i])].append((i, L.x0[i], L.y0[i], L.x1[i], L.y1[i]))
+    for p, bb, i, x0, y0, x1, y1 in rows:
+        groups[(p, bb)].append((i, x0, y0, x1, y1))
     flat = []
-    for (p, bb), rows in groups.items():
-        for r in acad_group(rows, bb, tol, e2e):
+    for (p, bb), g in groups.items():
+        for r in acad_group(g, bb, tol, e2e):
             flat += r
     return flat
 
 
-def acad_par(L, workers=4, tol=1e-6, end_to_end=False, ignore=(), timings=None):
+def acad_par(L, workers=4, tol=1e-6, end_to_end=False, ignore=(), timings=None, pool=None):
+    """pool: un multiprocessing.Pool ya abierto para reutilizarlo entre llamadas (en Windows
+    arrancar procesos cuesta ~0,5 s cada vez); si no se pasa, se crea uno."""
     import time
     import numpy as np
     t = time.perf_counter()
@@ -339,15 +342,25 @@ def acad_par(L, workers=4, tol=1e-6, end_to_end=False, ignore=(), timings=None):
     pid = ((b % _M) * 1000003 + props % _M) % _M % nparts
     order = np.argsort(pid, kind="stable")
     cuts = np.searchsorted(pid[order], np.arange(1, nparts))
-    parts = [p.tolist() for p in np.split(order, cuts)]
-    _G.update(L=L, props=props.tolist(), b=b.tolist(), tol=tol, e2e=end_to_end, parts=parts)
+    A = L.np
+    tasks = []
+    for idx in np.split(order, cuts):
+        cols = [props[idx], b[idx], idx, A["x0"][idx], A["y0"][idx], A["x1"][idx], A["y1"][idx]]
+        rows = list(zip(*(c.tolist() for c in cols)))
+        tasks.append((tol, end_to_end, rows))
+    tasks.sort(key=lambda tk: -len(tk[2]))
     t1 = time.perf_counter()
-    with _pool(workers) as pool:
-        outs = pool.map(_acad_work, sorted(range(nparts), key=lambda j: -len(parts[j])), chunksize=1)
+    own = pool is None
+    if own:
+        pool = mp.get_context("fork" if "fork" in mp.get_all_start_methods() else "spawn").Pool(workers)
+    try:
+        outs = pool.map(_acad_rows, tasks, chunksize=1)
+    finally:
+        if own:
+            pool.close(); pool.join()
     t2 = time.perf_counter()
     flat = np.concatenate([np.asarray(f, dtype=np.int64) for f in outs]).reshape(-1, 5)
     res = flat[np.argsort(flat[:, 0])].tolist()
-    _G.clear()
     if timings is not None:
         timings.update(partition=t1 - t, compute=t2 - t1, reassemble=time.perf_counter() - t2)
     return res

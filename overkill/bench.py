@@ -4,6 +4,7 @@
   python bench.py time   archivo.dxf [reps]     # tiempos por fase con 1, 2 y 4 trabajadores
   python bench.py write  archivo.dxf salida.dxf [workers]
   python bench.py acad   archivo.dxf            # modo AutoCAD: conteos + igualdad seq/par
+  python bench.py acadtime archivo.dxf          # modo AutoCAD: tiempos con pool ya abierto
 """
 import json
 import statistics
@@ -80,6 +81,21 @@ if __name__ == "__main__":
             same = all(ok.fingerprint(ok.result_lines(L, ok.acad_par(L, workers=w, **kw))) == fp
                        for w in (1, 2, 4))
             print(f"{name:13s} lineas={n:8d}  paralelo 1/2/4={'IGUAL' if same else 'DISTINTO'}")
+    elif cmd == "acadtime":
+        import multiprocessing as mp
+        import os
+        L = ok.read_lines(path)
+        fp = ok.fingerprint(ok.result_lines(L, ok.acad_seq(L)))
+        row = {"n": len(L), "seq": round(min(_t(lambda: ok.acad_seq(L)) for _ in range(3)), 3)}
+        meth = "fork" if "fork" in mp.get_all_start_methods() else "spawn"
+        ws = [w for w in (1, 2, 4, 8, 16, 32) if w <= (os.cpu_count() or 4)]
+        for w in ws:
+            # pool abierto antes de medir: en un plugin los hilos ya estarían creados
+            with mp.get_context(meth).Pool(w) as pool:
+                pool.map(abs, range(w))
+                row[f"par{w}"] = round(min(_t(lambda: ok.acad_par(L, w, pool=pool)) for _ in range(3)), 3)
+                assert ok.fingerprint(ok.result_lines(L, ok.acad_par(L, w, pool=pool))) == fp
+        print(json.dumps(row))
     elif cmd == "write":
         L = ok.read_lines(path)
         w = int(sys.argv[4]) if len(sys.argv) > 4 else 4
