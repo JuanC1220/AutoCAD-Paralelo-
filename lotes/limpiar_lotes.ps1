@@ -72,13 +72,17 @@ $sello = Get-Date -Format 'yyyyMMdd_HHmmss'
 # --- guion de AutoCAD (igual para todos; sólo cambia el archivo de resultados)
 # Cuenta las tablas antes y después, AUDIT corrigiendo, y PURGE Todo + Regapps repetido hasta que
 # no quede nada (bloques dentro de bloques necesitan varias pasadas). Las marcas de AUDIT se arman con
-# strcat para que el eco del guion en el log no las contenga. Respuestas con "_" para que
+# strcat para que el eco del guion en el log no las contenga.
+# Se guarda con SAVEAS 2018 sobre el mismo DWG y no con QSAVE: si en AutoCAD el formato por defecto es
+# DXF, QSAVE escribe un .dxf aparte y deja el DWG sin limpiar.
+# lp:activo mira el bit 1 de CMDACTIVE (comando en curso; el 4 es el propio guion). Sin comentarios
+# dentro del LISP: en un .scr el texto tras ")" se ejecuta como comandos. Respuestas con "_" para que
 # funcione en AutoCAD en cualquier idioma.
 $lisp = @'
 (defun lp:tabla (tb / n d) (setq n 0 d (tblnext tb T)) (while d (setq n (1+ n) d (tblnext tb))) n)
 (defun lp:cuentas () (mapcar 'lp:tabla '("BLOCK" "LAYER" "LTYPE" "STYLE" "DIMSTYLE" "APPID")))
 (defun lp:txt (l / s) (setq s "") (foreach x l (setq s (strcat s (itoa x) ";"))) s)
-(defun lp:activo () (= 1 (logand 1 (getvar "CMDACTIVE"))))   ; bit 1 = comando en curso (el 4 es el propio guion)
+(defun lp:activo () (= 1 (logand 1 (getvar "CMDACTIVE"))))
 (defun lp:fin () (while (lp:activo) (command "")))
 (defun lp:purgar (op)
   (command "_.-PURGE" op)
@@ -97,7 +101,8 @@ $lisp = @'
   (setq lp:c (lp:cuentas))))
 (lp:w "despues" (lp:txt lp:c))
 (lp:w "pasadas" (itoa lp:i))
-(command "_.QSAVE") (lp:fin)
+(command "_.SAVEAS" "2018" (strcat (getvar "DWGPREFIX") (getvar "DWGNAME")))
+(while (lp:activo) (command "_Y"))
 (lp:w "dbmod" (itoa (getvar "DBMOD")))
 (lp:w "ms" (itoa (- (getvar "MILLISECS") lp:t0)))
 (close lp:f)
@@ -107,7 +112,12 @@ $lisp = $lisp.Replace('@AUDIT@', (Bool (-not $SinAudit))).Replace('@PURGE@', (Bo
 
 function Leer-Log([string]$ruta) {
     if (-not (Test-Path $ruta)) { return '' }
-    $b = [IO.File]::ReadAllBytes($ruta)
+    # el log puede seguir abierto tras salir accoreconsole (lo hereda AcEventSync): leer compartido
+    try {
+        $fs = [IO.FileStream]::new($ruta, 'Open', 'Read', 'ReadWrite, Delete')
+        try { $b = [byte[]]::new($fs.Length); [void]$fs.Read($b, 0, $b.Length) } finally { $fs.Dispose() }
+    }
+    catch { return '' }
     $ceros = ($b | Select-Object -First 4000 | Where-Object { $_ -eq 0 }).Count
     $enc = if ($ceros -gt 100) { [Text.Encoding]::Unicode } else { [Text.Encoding]::Default }   # accoreconsole escribe UTF-16
     return $enc.GetString($b).Replace("`0", '')
@@ -146,7 +156,7 @@ function Terminar($j, [bool]$vencido) {
     }
     if ($vencido) { $r.Estado = 'ERROR'; $r.Mensaje = "Superó $TiempoMax s; se detuvo." }
     elseif (-not $res.ContainsKey('antes')) { $r.Estado = 'ERROR'; $r.Mensaje = 'AutoCAD no pudo abrir o procesar el dibujo (ver log).' }
-    elseif ($res['dbmod'] -ne '0') { $r.Estado = 'ERROR'; $r.Mensaje = 'No se pudo guardar el dibujo (ver log).' }
+    elseif ($res['dbmod'] -ne '0' -or (Get-Item -LiteralPath $j.Destino).LastWriteTime -lt $j.Inicio) { $r.Estado = 'ERROR'; $r.Mensaje = 'No se pudo guardar el dibujo (ver log).' }
     else { $r.Estado = 'OK' }
     Remove-Item ([IO.Path]::ChangeExtension($j.Destino, '.bak')) -ErrorAction SilentlyContinue
     if ($r.Estado -eq 'OK') {
@@ -222,7 +232,6 @@ $filas | ForEach-Object {
 
 $ok = @($filas | Where-Object Estado -eq 'OK')
 $antes = ($ok | Measure-Object BytesAntes -Sum).Sum; $desp = ($ok | Measure-Object BytesDespues -Sum).Sum
-$suma = ($filas | Measure-Object Segundos -Sum).Sum
 $real = [Math]::Round($reloj.Elapsed.TotalSeconds, 1)
 function MB($b) { if ($b -eq $null) { '' } else { '{0:N2}' -f ($b / 1MB) } }
 function Esc($s) { [Net.WebUtility]::HtmlEncode([string]$s) }
@@ -235,7 +244,7 @@ foreach ($r in $filas) {
     [void]$sb.Append("<tr$cls><td>$(Esc $r.Archivo)</td><td>$($r.Estado)</td><td class=n>$(MB $r.BytesAntes)</td><td class=n>$(MB $r.BytesDespues)</td><td class=n>$($r.ReduccionPct)</td><td class=n>$($r.Segundos)</td><td class=n title=`"$(Esc $r.Auditoria)`">$aud</td><td class=n>$(Par $r.BloquesAntes $r.BloquesDespues)</td><td class=n>$(Par $r.CapasAntes $r.CapasDespues)</td><td class=n>$(Par $r.TiposLineaAntes $r.TiposLineaDespues)</td><td class=n>$(Par $r.EstilosTextoAntes $r.EstilosTextoDespues)</td><td class=n>$(Par $r.RegappsAntes $r.RegappsDespues)</td><td>$msg</td></tr>`n")
 }
 $redTot = if ($antes) { '{0:N1}' -f (100.0 * (1 - $desp / $antes)) } else { '-' }
-$gan = if ($real -gt 0) { '{0:N1}' -f ($suma / $real) } else { '-' }
+$porArch = if ($filas.Count) { '{0:N1}' -f ($real / $filas.Count) } else { '-' }
 $html = @"
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Limpieza por lotes</title>
@@ -256,7 +265,7 @@ small{color:var(--mut)}
 <div><b>$($ok.Count) / $($filas.Count)</b>archivos limpios</div>
 <div><b>$(MB $antes) &rarr; $(MB $desp) MB</b>$redTot % menos</div>
 <div><b>$real s</b>tiempo real</div>
-<div><b>$gan&times;</b>ganancia frente a uno por uno ($([Math]::Round($suma,1)) s sumados)</div>
+<div><b>$porArch s</b>por archivo (para la ganancia real, compara con una corrida -Hilos 1)</div>
 </div>
 <div class="tabla"><table>
 <tr><th>Archivo</th><th>Estado</th><th class=n>MB antes</th><th class=n>MB después</th><th class=n>% menos</th><th class=n>s</th><th class=n>Audit encontr./corr.</th><th class=n>Bloques</th><th class=n>Capas</th><th class=n>Tipos línea</th><th class=n>Estilos texto</th><th class=n>Regapps</th><th>Notas</th></tr>
@@ -270,6 +279,6 @@ $errores = $filas.Count - $ok.Count
 if ($errores -eq 0) { Remove-Item $trab -Recurse -Force -ErrorAction SilentlyContinue }   # los logs sólo se guardan si hubo errores
 Write-Host ''
 Write-Host "Listo en $real s: $($ok.Count) OK, $errores con error. $(MB $antes) MB -> $(MB $desp) MB ($redTot % menos)."
-Write-Host "Ganancia frente a uno por uno: $gan x"
+Write-Host "$porArch s por archivo. Para medir la ganancia, compara con una corrida -Hilos 1."
 Write-Host "Informe: $htmlF"
 if (-not $EnSitio) { Write-Host 'Tus originales no se tocaron.' }

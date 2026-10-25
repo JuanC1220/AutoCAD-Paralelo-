@@ -32,7 +32,11 @@ powershell -ExecutionPolicy Bypass -File limpiar_lotes.ps1 -Entrada C:\planos -R
 2. `AUDIT` corrigiendo errores.
 3. `-PURGE` Todo y Regapps, repetido hasta que ya no cambie nada (los bloques dentro de bloques sin usar
    necesitan varias pasadas; máximo 6).
-4. Guarda (`QSAVE`). Ojo: AutoCAD guarda en su formato por defecto, así que un DWG antiguo sale en formato 2018.
+4. Guarda con `SAVEAS 2018` sobre el mismo DWG (no `QSAVE`: si el formato por defecto de AutoCAD es DXF, QSAVE
+   escribe un .dxf aparte). Ojo: un DWG más antiguo sale en formato 2018 y ya no abre en AutoCAD anterior a 2018.
+   Si el DWG no quedó reescrito, el archivo se marca ERROR.
+
+PURGE también quita la capa Defpoints si no se usa; AutoCAD la vuelve a crear cuando hace falta.
 
 Las respuestas van con `_` (`_A`, `_R`, `_Y`), así funciona en AutoCAD en cualquier idioma. Las cuentas de
 bloques, capas, tipos de línea, estilos y regapps se toman con AutoLISP antes y después, no leyendo el texto.
@@ -41,8 +45,9 @@ bloques, capas, tipos de línea, estilos y regapps se toman con AutoLISP antes y
 
 En la carpeta de salida quedan `informe_<fecha>.html` e `informe_<fecha>.csv` con, por archivo: estado,
 MB antes y después, % de reducción, segundos, errores de AUDIT encontrados/corregidos, y bloques, capas, tipos
-de línea, estilos de texto y de cota y regapps antes → después. Arriba, el total y la ganancia frente a hacerlos
-uno por uno (suma de los tiempos de cada archivo / tiempo real).
+de línea, estilos de texto y de cota y regapps antes → después. Arriba, el total, el tiempo real y los
+segundos por archivo. Para la ganancia, compara con una corrida `-Hilos 1` (sumar los segundos de cada archivo
+exagera, porque en paralelo cada uno tarda más).
 
 Si un archivo falla (no abre, no guarda, se pasa de tiempo) se marca ERROR, no queda una copia a medias en la
 salida, y su log de accoreconsole se guarda en `<Salida>\_trabajo`.
@@ -58,3 +63,18 @@ powershell -ExecutionPolicy Bypass -File limpiar_lotes.ps1 -Entrada prueba_lotes
 ```
 
 Cada `plano_NNN.dxf.json` dice lo que debería quedar (10 capas usadas + la 0, el bloque `USADO`).
+
+## Resultado medido (AutoCAD 2027, Ryzen 9 5950X 16 núcleos / 32 hilos, 32 GB)
+
+32 DWG sintéticos (0,40 a 1,74 MB, 32,70 MB en total), 32/32 OK en todas las corridas:
+
+| A la vez | Tiempo real | Ganancia |
+|---|---|---|
+| 1 | 103,7 s | 1,0× |
+| 4 | 32,5 s | 3,2× |
+| 16 | 18,5 s | 5,6× |
+| 32 | 18,3 s | 5,7× |
+
+Pasar de 16 a 32 no mejora: cada dibujo sube de unos 3 s a unos 8 s por la competencia entre procesos
+(disco, memoria). Por eso el valor por defecto son los núcleos físicos. Verificado con LISP: cada dibujo limpio
+conserva todas sus LINE e INSERT y queda con 11 capas y el bloque usado, como dice su `.json`.
