@@ -41,3 +41,8 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 ```
 
 Nube, 4 núcleos, 600.397 líneas (sólo cálculo): 1 hilo 0,256 s, 4 hilos 0,073 s (Python: 3,3 s y 1,5 s).
+
+## Limpieza por lotes (lotes/)
+
+AUDIT + PURGE sobre muchos DWG a la vez, un `accoreconsole` por dibujo, con informe de tamaño antes/después.
+Ver [lotes/README.md](lotes/README.md).
