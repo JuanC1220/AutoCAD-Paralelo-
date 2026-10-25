@@ -34,7 +34,8 @@ Da exactamente las mismas líneas que `acad_seq` (misma huella SHA-256 en 9 caso
 
 ```bash
 cd overkill_cs
-dotnet run -c Release -- ../overkill/s400k.dxf --threads 1,2,4,8,16
+dotnet run -c Release -f net8.0 -- ../overkill/s400k.dxf   # o -f net7.0
+# --threads 1,2,4,8,16
 # o un .exe para Windows sin instalar .NET:
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
 ```
