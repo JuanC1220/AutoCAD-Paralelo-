@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Plugin .NET de comandos paralelos para AutoCAD 2027 (.NET 10). Se carga con NETLOAD; también funciona en accoreconsole. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <Nullable>disable</Nullable>
+    <Optimize>true</Optimize>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>AcadParalelo</AssemblyName>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- el mismo núcleo que el programa de consola: mismas reglas, mismo resultado -->
+    <Compile Include="..\overkill\v2\cs\OverkillV2Core.cs" Link="OverkillV2Core.cs" />
+    <Compile Include="..\hatch_cs\ContornosCore.cs" Link="ContornosCore.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- sólo AcCoreMgd + AcDbMgd: nada de interfaz, así carga también en accoreconsole -->
+    <PackageReference Include="AutoCAD.NET.Core" Version="26.0.0" ExcludeAssets="runtime" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Prueba del núcleo de contornos fuera de AutoCAD: lee LINE de un DXF y los puntos de <dxf>.puntos.txt -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net10.0;net8.0</TargetFrameworks>
+    <Nullable>disable</Nullable>
+    <Optimize>true</Optimize>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\overkill_cs\OverkillCore.cs" Link="OverkillCore.cs" />
+  </ItemGroup>
+</Project>
