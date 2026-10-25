@@ -71,6 +71,12 @@ redistribuye nada de Autodesk.
 
 Ninguna de las dos exige cambiar el código.
 
+## Publicar una versión
+
+Copiar el zip y unas notas (`notas.md`, la primera línea es el título) a `paquete/versiones/vX.Y.Z/`, fusionar en
+`main` y subir la etiqueta: `git tag vX.Y.Z && git push origin vX.Y.Z`. La acción `.github/workflows/version.yml`
+crea la versión en GitHub con ese zip para descargar.
+
 ## Pendiente
 
 - Menú o cinta con los comandos: la DLL sólo usa la parte de AutoCAD sin interfaz (para correr también en
