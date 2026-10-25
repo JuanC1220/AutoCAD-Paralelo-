@@ -1,61 +1,77 @@
-# AutoCAD Paralelo
+# AutoCAD Paralelo: OVERKILL, HATCH y PURGE más rápidos en AutoCAD
 
-**Comandos pesados de AutoCAD, rehechos para usar todos los núcleos del procesador, con el mismo resultado.**
+**Herramientas gratuitas para los cálculos de AutoCAD que se hacen eternos, se cuelgan o dejan el dibujo a medias.
+Usan todos los núcleos del procesador y dejan el mismo dibujo que el comando original, o uno más correcto.**
 
-AutoCAD hace casi todo en un solo núcleo. En un PC de 16 núcleos, eso deja 15 sin trabajar mientras esperas a
-OVERKILL, HATCH o a limpiar una carpeta de planos. Este proyecto toma esos comandos uno por uno, reparte el cálculo
-entre núcleos y **comprueba que el dibujo quede igual** que con el comando original. Si no da lo mismo, no sirve,
-por rápido que sea.
+¿Te pasa alguna de estas?
 
-*English summary below.*
+- **OVERKILL tarda minutos** o deja líneas duplicadas y solapadas sin borrar.
+- **HATCH se queda pensando** ("AutoCAD no responde") al sombrear muchas áreas o al elegir un punto interior.
+- **Tienes que purgar y auditar decenas o cientos de DWG** y hacerlo uno por uno te lleva la tarde.
+- Tu PC tiene 8, 16 o más núcleos, pero **AutoCAD usa uno solo** y el resto está parado.
 
-## Resultados medidos
+Este proyecto toma esos comandos uno por uno y los rehace para repartir el cálculo entre todos los núcleos. Cada
+herramienta se comprueba contra el comando de AutoCAD: si no deja el mismo dibujo, no sirve, por rápida que sea.
 
-En AutoCAD 2027 real, PC con Ryzen 9 5950X (16 núcleos / 32 hilos):
+*English version below: [faster OVERKILL, HATCH and batch PURGE for AutoCAD](#english).*
 
-| Herramienta | Caso | AutoCAD | Esta herramienta | Estado |
-|---|---|---|---|---|
-| Limpieza por lotes (AUDIT + PURGE) | 32 DWG | 103,7 s | **18,5 s** (5,6×) | ✅ lista: [`lotes/`](lotes/) |
-| `POVERKILL` (plugin) | 1,2 millones de líneas | 9,8 s y deja 50.351 líneas de más | **7,4 s**, exacto | ✅ en [`acad_paralelo/`](acad_paralelo/); paquete [`paquete/`](paquete/) |
-| `PHATCH` (plugin) | 2.500 áreas con islas | 98,8 s | **2,5 s** (40×) | ✅ en [`acad_paralelo/`](acad_paralelo/) |
-| OVERKILL v2 (motor) | 3,1 millones de entidades, 23 tipos de caso difícil | 37,8 s y deja 118.457 entidades de más | **1,2 s**, 100 % exacto | ✅ motor listo: [`overkill/v2/`](overkill/v2/) |
+## Qué resuelve
 
-- `POVERKILL` mide el comando completo dentro de AutoCAD (selección, leer, calcular, aplicar) y usa el motor
-  OVERKILL v2: LINE, ARC, CIRCLE y LWPOLYLINE con todas sus propiedades. Deja exactamente las líneas esperadas;
-  AutoCAD deja ~5 % de más porque no une tramos alineados extremo con extremo. El cálculo con 32 hilos es 0,6 s;
-  el resto es leer y escribir en el dibujo, que AutoCAD sólo permite desde un hilo.
-- `PHATCH` encuentra los mismos contornos que AutoCAD: 2.500 de 2.500 iguales comparados con `TraceBoundary`.
-- OVERKILL v2 usa la tolerancia como distancia real en 3D y revisa todas las propiedades. Sobre un dibujo de
-  prueba hecho para encontrar fallos (coordenadas UTM, Z distinta, capas bloqueadas, arcos, polilíneas...) deja
-  exactamente lo esperado, donde el OVERKILL de AutoCAD 2027 se equivoca.
-
-## Qué hay en el repo
-
-| Carpeta | Qué es | Para quién |
+| Problema en AutoCAD | Herramienta | Resultado medido |
 |---|---|---|
-| [`lotes/`](lotes/) | **Limpieza por lotes**: AUDIT + PURGE sobre una carpeta entera de DWG, varios a la vez, con informe HTML/CSV de cuánto bajó cada archivo. Sólo AutoCAD y PowerShell. | Usuarios de AutoCAD |
-| [`paquete/`](paquete/) | **Instalador** del plugin: un `.bundle` que AutoCAD carga solo al arrancar (sin `NETLOAD`) y un `instalar.bat`. | Usuarios de AutoCAD |
-| `acad_paralelo/` | Plugin .NET para AutoCAD 2027 con `POVERKILL` y `PHATCH`. | Desarrolladores |
-| [`overkill/v2/`](overkill/v2/) | **OVERKILL v2**: motor exacto con tolerancia real en 3D, arcos, círculos y polilíneas (Python y C#), y [`overkill/extremo/`](overkill/extremo/), que genera el dibujo de prueba de 3,1 millones de entidades y verifica lo que debe quedar. | Desarrolladores |
-| [`overkill_cs/`](overkill_cs/) | Núcleo de OVERKILL en C#, sin AutoCAD: lee un DXF y mide con 1, 2, 4... hilos. | Desarrolladores |
-| [`overkill/`](overkill/) | Prototipo en Python donde se probó la idea y se midió cuándo conviene repartir. | Curiosos, investigación |
+| Purgar y auditar muchos dibujos (PURGE + AUDIT por lotes) | Limpieza por lotes, en [`lotes/`](lotes/) | 32 DWG en **18,5 s** en vez de 103,7 s (5,6 veces más rápido) |
+| OVERKILL lento o que deja duplicados | Comando `POVERKILL` | 1,2 millones de líneas en **7,4 s**, exacto. OVERKILL: 9,8 s y deja 50.351 líneas de más |
+| HATCH que se cuelga buscando el contorno | Comando `PHATCH` | 2.500 áreas con islas en **2,5 s**. HATCH: 98,8 s. Contornos idénticos (2.500 de 2.500) |
+| OVERKILL que falla en dibujos difíciles (coordenadas UTM, Z, arcos, polilíneas) | Motor OVERKILL v2 | 3,1 millones de entidades en **1,2 s**, 100 % exacto. OVERKILL: 37,8 s y deja 118.457 de más |
 
-## Empezar
+Medido en AutoCAD 2027 real, con un Ryzen 9 5950X (16 núcleos). En un PC con menos núcleos la ganancia es menor,
+pero el resultado es el mismo.
 
-**Limpiar una carpeta de planos.** Necesitas AutoCAD (no LT) en Windows. Descarga el repo, entra en `lotes/`, haz
-doble clic en `limpiar_lotes.bat` y elige la carpeta. Los originales no se tocan: los dibujos limpios quedan en
-`<carpeta>_limpios`, con el informe al lado. Más opciones en [lotes/README.md](lotes/README.md).
+## Descargar e instalar
 
-**Instalar POVERKILL.** Necesitas AutoCAD 2027. Descomprime el paquete `POverkill-<versión>.zip`, doble clic en
-`instalar.bat`, abre AutoCAD y escribe `POVERKILL`. Cómo armar el zip y cómo desinstalar:
-[paquete/README.md](paquete/README.md).
+**Para eliminar líneas duplicadas y sombrear rápido (POVERKILL y PHATCH).** Necesitas AutoCAD 2027 en Windows.
 
-**Compilar y medir.** El núcleo C# corre en cualquier sistema con .NET 7 u 8:
+1. Baja el zip desde [Versiones (Releases)](https://github.com/JuanC1220/AutoCAD-Paralelo-/releases) y descomprímelo.
+2. Doble clic en `instalar.bat`. No hace falta `NETLOAD`: AutoCAD lo carga solo al arrancar.
+3. Abre AutoCAD y escribe `POVERKILL`. La primera vez AutoCAD pregunta si cargar la DLL: elige "Cargar siempre".
 
-```bash
-cd overkill_cs
-dotnet run -c Release -f net8.0 -- dibujo.dxf --threads 1,2,4,8
-```
+La versión 0.1.0 trae `POVERKILL` sólo para líneas. `PHATCH` y `POVERKILL` con el motor v2 (arcos, círculos y
+polilíneas) ya están en [`acad_paralelo/`](acad_paralelo/): se cargan con `NETLOAD` desde
+`acad_paralelo/dist/AcadParalelo.dll` y llegarán al instalador en la próxima versión.
+Más detalles y cómo desinstalar: [paquete/README.md](paquete/README.md).
+
+**Para purgar y auditar una carpeta entera de planos.** Sirve con AutoCAD 2018 o posterior. Descarga el repo
+(botón verde *Code* → *Download ZIP*), entra en `lotes/`, doble clic en `limpiar_lotes.bat` y elige la carpeta.
+Los originales no se tocan: los dibujos limpios quedan en `<carpeta>_limpios`, con un informe de cuánto bajó
+cada archivo. Opciones en [lotes/README.md](lotes/README.md).
+
+Prueba siempre primero en copias de tus dibujos.
+
+## Preguntas frecuentes
+
+**¿Por qué OVERKILL es tan lento en dibujos grandes?** Compara cada línea con sus vecinas usando un solo núcleo.
+`POVERKILL` agrupa las líneas que pueden solaparse y procesa los grupos a la vez en todos los núcleos.
+
+**¿Por qué OVERKILL deja líneas duplicadas?** En nuestras pruebas, OVERKILL de AutoCAD 2027 sólo compara líneas
+casi perfectamente paralelas, falla con coordenadas grandes (UTM) y no une tramos alineados extremo con extremo.
+El motor v2 usa la tolerancia como una distancia real y revisa todas las propiedades (capa, color, tipo de línea,
+grosor...), así que deja exactamente lo que debería quedar.
+
+**¿Por qué se congela AutoCAD al usar HATCH?** Para cada punto interior, HATCH analiza todo el dibujo otra vez
+buscando el contorno. `PHATCH` analiza el dibujo una sola vez y busca todos los contornos en paralelo.
+
+**¿Se puede purgar muchos DWG a la vez?** Sí: la limpieza por lotes abre varios AutoCAD sin ventana
+(`accoreconsole`) al mismo tiempo, uno por dibujo, y hace AUDIT y PURGE en cada uno.
+
+**¿Funciona en AutoCAD LT?** No. LT no admite plugins .NET ni `accoreconsole`.
+
+**¿Funciona en AutoCAD 2025 o 2026?** La limpieza por lotes sí. Los comandos `POVERKILL` y `PHATCH` por ahora
+sólo en AutoCAD 2027, porque usan .NET 10.
+
+**¿Puedo deshacer?** Sí. Cada comando aplica todos sus cambios de una vez y se deshace con un solo `U`.
+
+**¿Es seguro?** El código es abierto: puedes leer exactamente qué hace. Las herramientas no envían nada a
+Internet. Aun así, se entregan sin garantía.
 
 ## Cómo funciona
 
@@ -65,58 +81,78 @@ Todos los comandos siguen la misma receta:
 2. **Copiar** lo necesario a arreglos simples, sin objetos de AutoCAD.
 3. **Calcular en paralelo**, repartiendo el trabajo en grupos que no dependen entre sí.
 4. **Reensamblar** los resultados en un orden fijo.
-5. **Escribir** los cambios en una sola transacción (se deshacen con un solo `U`).
+5. **Escribir** los cambios en una sola transacción.
 
 El reparto es la parte delicada: si dos piezas que deben compararse caen en grupos distintos, el resultado
-cambia. Por eso cada comando se prueba con 1 y con N hilos y se compara la huella SHA-256 del resultado, que
-tiene que ser idéntica, y además se compara con lo que deja el comando de AutoCAD.
+cambia. Por eso cada comando se prueba con 1 y con N hilos (la huella SHA-256 del resultado tiene que ser
+idéntica) y se compara con lo que deja el comando de AutoCAD.
 
 Lo que aprendimos al medir:
 
-- **En dibujos pequeños no conviene.** Con menos de unas 30.000 líneas, repartir cuesta lo mismo que lo que se
-  gana. Por encima, la ganancia crece con el tamaño.
-- **El cálculo deja de ser el problema enseguida.** Con 16 hilos el cálculo de OVERKILL tarda centésimas; el
-  tiempo se va en leer y escribir el dibujo. Leer bien importa más que paralelizar: abrir cada objeto por
-  separado en vez de todos en una transacción bajó la lectura de 1,2 millones de líneas de 92 s a 0,4 s.
-- **Entre archivos es lo más fácil.** La limpieza por lotes reparte dibujos completos, uno por proceso, así
-  que no hay ningún riesgo de cambiar el resultado. Pasar de 16 a 32 procesos ya no mejora: manda el disco.
+- **En dibujos pequeños no se nota.** Con menos de unas 30.000 líneas, repartir cuesta casi lo mismo que lo que
+  se gana. Por encima, la ganancia crece con el tamaño.
+- **El cálculo deja de ser el problema enseguida.** Con 32 hilos el cálculo de OVERKILL tarda 0,6 s en 1,2
+  millones de líneas; el resto del tiempo es leer y escribir en el dibujo, que AutoCAD sólo permite desde un hilo.
+- **Entre archivos es lo más fácil.** La limpieza por lotes reparte dibujos completos, uno por proceso, así que
+  no hay ningún riesgo de cambiar el resultado. Pasar de 16 a 32 procesos ya no mejora: manda el disco.
+
+## Qué hay en el repo
+
+| Carpeta | Qué es |
+|---|---|
+| [`lotes/`](lotes/) | Limpieza por lotes: AUDIT + PURGE sobre muchos DWG a la vez, con informe HTML y CSV. Sólo AutoCAD y PowerShell. |
+| [`paquete/`](paquete/) | Instalador del plugin (`.bundle` que AutoCAD carga solo) y cómo publicar versiones. |
+| [`acad_paralelo/`](acad_paralelo/) | Plugin .NET para AutoCAD 2027 con `POVERKILL` y `PHATCH`. |
+| [`overkill/v2/`](overkill/v2/) | Motor OVERKILL v2 (Python y C#) y, en [`overkill/extremo/`](overkill/extremo/), el dibujo de prueba de 3,1 millones de entidades. |
+| [`hatch_cs/`](hatch_cs/) | Búsqueda de contornos de HATCH en paralelo, sin AutoCAD. |
+| [`overkill_cs/`](overkill_cs/) | Primer núcleo de OVERKILL en C#: lee un DXF y mide con 1, 2, 4... hilos. |
+| [`overkill/`](overkill/) | Prototipo en Python donde se probó la idea. |
 
 ## Próximos comandos
 
 1. `PJOIN`: unir líneas y arcos en polilíneas en muchos grupos a la vez.
 2. `PHATCH` con arcos y círculos como contorno e islas anidadas; `PBOUNDARY`.
 
-¿Tienes un comando que se te hace eterno? Abre un *issue* con el comando, el tamaño del dibujo y cuánto tarda.
-Ver [CONTRIBUTING.md](CONTRIBUTING.md).
+¿Hay un comando que se te hace eterno? Abre un [issue](https://github.com/JuanC1220/AutoCAD-Paralelo-/issues/new/choose)
+con el comando, el tamaño del dibujo y cuánto tarda. Ver [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Requisitos y límites
+## Licencia: gratis para uso no comercial
 
-- Windows con AutoCAD 2027 para el plugin (está compilado para .NET 10, que es lo que usa AutoCAD 2027).
-  AutoCAD 2025/2026 usan .NET 8 y no lo cargan todavía.
-- La limpieza por lotes funciona con AutoCAD 2018 o posterior (usa `accoreconsole` y guarda en formato 2018).
-- No funciona en AutoCAD LT: LT no admite plugins ni `accoreconsole`.
-- `PHATCH` sólo usa tramos rectos (LINE y polilíneas sin arcos) como contorno por ahora.
+Puedes usar, estudiar, modificar y compartir estas herramientas **gratis para cualquier fin no comercial**: uso
+personal, estudio, investigación, educación, organizaciones sin fines de lucro e instituciones públicas. **Vender
+estas herramientas o usarlas para obtener ganancias no está permitido** sin un permiso escrito del autor; si te
+interesa, abre un *issue*. Texto completo: [LICENSE](LICENSE) ([PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)).
 
-## Licencia y marcas
+La versión 0.1.0 de POverkill se publicó con licencia MIT; desde las versiones siguientes rige esta licencia.
 
-Código bajo licencia [MIT](LICENSE): puedes usarlo, modificarlo y repartirlo, también en proyectos comerciales,
-conservando el aviso de copyright. Se entrega sin garantía: prueba primero en copias de tus dibujos.
-
-Proyecto independiente, sin relación con Autodesk. AutoCAD es una marca registrada de Autodesk, Inc. Cada persona
-usa estas herramientas con su propia licencia de AutoCAD; el repo no incluye nada de Autodesk.
+**Sin relación con Autodesk.** Este es un proyecto independiente: no está hecho, aprobado ni respaldado por
+Autodesk, Inc. AutoCAD es una marca registrada de Autodesk, Inc. Cada persona usa estas herramientas con su propia
+licencia de AutoCAD, y el repo no incluye ni redistribuye ningún archivo de Autodesk.
 
 ---
 
-## English summary
+<a id="english"></a>
 
-**Heavy AutoCAD commands rebuilt to use every CPU core, with the same result.** Each command reads the drawing on
-the main thread, copies the data into plain arrays, computes in parallel, reassembles in a fixed order and writes
-the changes in one transaction. Every tool is checked to give an identical result with 1 and N threads (SHA-256
-fingerprint) and compared against the native AutoCAD command.
+## English: faster OVERKILL, HATCH and batch PURGE for AutoCAD
 
-Measured in AutoCAD 2027 on a 16-core Ryzen 9 5950X: batch AUDIT + PURGE of 32 DWG files in 18.5 s instead of
-103.7 s (5.6×); `POVERKILL` on 1.2 million lines in 7.4 s instead of 9.8 s, with the exact expected result; `PHATCH` 30–40×
-faster than HATCH with identical boundaries; OVERKILL v2 engine exact on a 3.1-million-entity
-stress drawing in 1.2 s, where AutoCAD takes 37.8 s and leaves 118,457 extra entities. Ready to use: [`lotes/`](lotes/) (batch cleanup,
-PowerShell only) and [`paquete/`](paquete/) (installer for the plugin, AutoCAD 2027). Docs are in Spanish;
-issues in English are welcome. MIT license. Not affiliated with Autodesk.
+**Free tools for the AutoCAD operations that take forever, freeze or leave the drawing half done.** They use every
+CPU core and leave the same drawing as the native command, or a more correct one.
+
+- **OVERKILL is slow** or leaves duplicate and overlapping lines: `POVERKILL` handles 1.2 million lines in 7.4 s
+  instead of 9.8 s, with the exact expected result (OVERKILL leaves 50,351 extra lines).
+- **HATCH freezes** ("AutoCAD not responding") when picking internal points: `PHATCH` fills 2,500 areas in 2.5 s
+  instead of 98.8 s, with identical boundaries.
+- **Purge and audit many DWG files at once**: batch cleanup does 32 drawings in 18.5 s instead of 103.7 s.
+- **AutoCAD uses a single core** while the rest of your CPU sits idle: every tool here runs in parallel.
+
+Measured in AutoCAD 2027 on a 16-core Ryzen 9 5950X. Download the installer from
+[Releases](https://github.com/JuanC1220/AutoCAD-Paralelo-/releases) (AutoCAD 2027, Windows; version 0.1.0 has
+`POVERKILL` for lines only, the rest is in `acad_paralelo/`). Batch cleanup works
+with AutoCAD 2018 or later. Not for AutoCAD LT. Docs are in Spanish; issues in English are welcome.
+
+**License:** free for any noncommercial use (personal, study, research, education, nonprofits, public
+institutions) under [PolyForm Noncommercial 1.0.0](LICENSE). Selling it or using it for profit requires written
+permission from the author. Version 0.1.0 of POverkill was released under MIT.
+
+**Not affiliated with Autodesk.** AutoCAD is a registered trademark of Autodesk, Inc. No Autodesk files are
+included or redistributed.
